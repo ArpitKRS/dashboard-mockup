@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Search, Bell, UserCircle } from "lucide-react";
 
 /**
@@ -6,6 +7,10 @@ import { Search, Bell, UserCircle } from "lucide-react";
  * notification/broadcast fetches. Only the Dashboard route exists here, so
  * every link is inert; "Events" stays visually greyed out the same way the
  * real header renders it (not shipped yet).
+ *
+ * The logo is the real pjm pod logo (osmosis/public/landing/images/pods/pjm_logo.png)
+ * rather than a hand-drawn recreation — this pod's own PodHeader would resolve
+ * to the same file via `pod.pod_logo`.
  */
 export default function AppHeader() {
   const navItems = [
@@ -19,15 +24,8 @@ export default function AppHeader() {
     <header className="bg-white border-b border-pod-border sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-end h-20 pb-4">
-          <div className="flex items-center gap-2 pl-2">
-            <svg viewBox="0 0 40 40" className="w-9 h-9 shrink-0" aria-hidden>
-              <circle cx="20" cy="20" r="17" fill="none" stroke="#2FBFA6" strokeWidth="4" strokeDasharray="80 40" strokeLinecap="round" transform="rotate(-45 20 20)" />
-              <circle cx="32" cy="12" r="3.5" fill="#F2994A" />
-            </svg>
-            <h1 className="text-2xl font-extrabold leading-none tracking-tight">
-              <span className="bg-gradient-to-r from-[#2FBFA6] to-[#F2994A] bg-clip-text text-transparent">Osmosis</span>
-              <span className="block text-xs font-bold tracking-[0.2em] text-pod-text">LEARN</span>
-            </h1>
+          <div className="w-40 h-12 relative shrink-0">
+            <Image src="/osmosis_logo.png" alt="Osmosis Learn" fill className="object-contain" priority sizes="160px" />
           </div>
 
           <div className="ml-auto flex items-end gap-6 md:gap-10">

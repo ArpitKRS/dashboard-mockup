@@ -11,11 +11,9 @@ import {
 } from './mockResumeData'
 import { type CapabilityAnswers, isCapabilityFormComplete } from '@/lib/capabilityForm'
 import ProfileBanner from './ProfileBanner'
-import ProfileCompletionHero from './ProfileCompletionHero'
-import SkillsPanel from './SkillsPanel'
+import CareerPathSection from './CareerPathSection'
 import ProgressCountsPanel from './ProgressCountsPanel'
 import CapabilityBuildingForm from './CapabilityBuildingForm'
-import CapabilityInsightsCharts from './CapabilityInsightsCharts'
 
 // How long the mocked "analyzing" state lasts before the resume data lands —
 // see handleResumeFileSelected.
@@ -26,16 +24,14 @@ const MOCK_RESUME_PROCESSING_MS = 1200
  *
  * The real component fetches `user/profile/my-profile` and
  * `user/profile/capability-form` on mount; this mock-up has no backend or
- * session, so it starts from the same "brand new member" state those calls
- * would return for someone who hasn't done either step yet — matching the
- * reference screenshot exactly. Picking a resume file was already fully
- * mocked in the original (the real ai/resume-parse call is a TEMPORARY
- * stand-in there too), so that flow is unchanged.
+ * session, so it starts from a mock signed-in member instead — the banner
+ * needs a name and email to show, so an empty "brand new member" state
+ * (matching the reference screenshot) isn't useful here.
  */
 export default function DashboardClient() {
-    const [firstName] = useState('')
-    const [lastName] = useState('')
-    const [email] = useState('')
+    const [firstName] = useState('Jordan')
+    const [lastName] = useState('Ellis')
+    const [email] = useState('jordan.ellis@example.com')
     const [resumeFileName, setResumeFileName] = useState<string | null>(null)
     const [capabilityAnswers, setCapabilityAnswers] = useState<CapabilityAnswers>({})
     const [capabilityCompletedAt, setCapabilityCompletedAt] = useState<string | null>(null)
@@ -87,16 +83,14 @@ export default function DashboardClient() {
                 email={email}
             />
 
-            <ProfileCompletionHero
+            <CareerPathSection
                 completionPct={completionPct}
                 resumeUploaded={resumeUploaded}
                 resumeFileName={resumeFileName}
                 capabilityCompleted={capabilityCompleted}
+                capabilityAnswers={capabilityAnswers}
                 onUploadResumeClick={() => resumeFileInputRef.current?.click()}
                 onCapabilityFormClick={() => setShowCapabilityForm(true)}
-            />
-
-            <SkillsPanel
                 firstName={firstName}
                 skills={skills}
                 interests={interests}
@@ -109,10 +103,6 @@ export default function DashboardClient() {
                 onSummaryChange={setResumeSummary}
                 onRolesChange={setResumeRoles}
             />
-
-            {capabilityCompleted && (
-                <CapabilityInsightsCharts answers={capabilityAnswers} />
-            )}
 
             <ProgressCountsPanel />
 
