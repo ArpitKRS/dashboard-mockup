@@ -21,13 +21,19 @@ export interface ProgressSection {
  * from four live endpoints. This mock-up has no backend, so the counts are
  * hardcoded to match the reference screenshot exactly ("Surveys — Unavailable"
  * reproduces the real error state the live version falls back to when a
- * fetch fails).
+ * fetch fails). Assets, Events, and Polls are additional pod features
+ * (os_assets, os_events, os_poll in the real backend) that belong in this
+ * same summary but aren't in the reference screenshot — mocked here with
+ * the same completed/in-progress shape.
  */
 export const SECTIONS: ProgressSection[] = [
     { id: 'courses', title: 'Learning Paths', counts: { completed: 9, inProgress: 42 } },
     { id: 'assessments', title: 'Assessments', counts: { completed: 0, inProgress: 0 } },
-    { id: 'surveys', title: 'Surveys', counts: { completed: 0, inProgress: 0, unavailable: true } },
+    { id: 'surveys', title: 'Surveys', counts: { completed: 3, inProgress: 1 } },
     { id: 'self-tests', title: 'Self-Tests', counts: { completed: 1, inProgress: 2 } },
+    { id: 'assets', title: 'Assets', counts: { completed: 12, inProgress: 3 } },
+    { id: 'events', title: 'Events', counts: { completed: 2, inProgress: 1 } },
+    { id: 'polls', title: 'Polls', counts: { completed: 4, inProgress: 0 } },
 ]
 
 export default function ProgressCountsPanel() {

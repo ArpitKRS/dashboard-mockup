@@ -82,7 +82,7 @@ export default function ProfileBanner({
                 </div>
             </div>
             <div className="px-6 pb-6">
-                <div className="-mt-10 flex items-end gap-4">
+                <div className="-mt-6 flex items-end gap-4">
                     <UserAvatar
                         name={fullName}
                         size={80}
