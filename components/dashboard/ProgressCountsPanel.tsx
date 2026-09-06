@@ -3,10 +3,16 @@
 import { useState } from 'react'
 import AccordionPanel from '@/components/ui/AccordionPanel'
 
-interface CategoryCounts {
+export interface CategoryCounts {
     completed: number
     inProgress: number
     unavailable?: boolean
+}
+
+export interface ProgressSection {
+    id: string
+    title: string
+    counts: CategoryCounts
 }
 
 /**
@@ -17,7 +23,7 @@ interface CategoryCounts {
  * reproduces the real error state the live version falls back to when a
  * fetch fails).
  */
-const SECTIONS: { id: string; title: string; counts: CategoryCounts }[] = [
+export const SECTIONS: ProgressSection[] = [
     { id: 'courses', title: 'Learning Paths', counts: { completed: 9, inProgress: 42 } },
     { id: 'assessments', title: 'Assessments', counts: { completed: 0, inProgress: 0 } },
     { id: 'surveys', title: 'Surveys', counts: { completed: 0, inProgress: 0, unavailable: true } },

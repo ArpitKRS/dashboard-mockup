@@ -23,6 +23,18 @@ body {
   color: var(--color-pod-text);
 }
 
+/* Native <button> doesn't get a pointer cursor by default in every browser
+ * the way <a> does — every clickable control in this app is a <button>, so
+ * this one rule covers all of them instead of a `cursor-pointer` class on
+ * each one. */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 /* ── Capability Building Form: decorative star-pop on each answer ──
  * Copied verbatim from osmosis/app/globals.css, where it lives alongside
  * CapabilityBuildingForm.tsx. */

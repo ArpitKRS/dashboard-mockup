@@ -145,6 +145,18 @@ export function isCapabilityFormComplete(answers: CapabilityAnswers): boolean {
     return CAPABILITY_QUESTIONS.every(q => answers[q.id] != null)
 }
 
+/** The 6 self-rating questions — one per category, each its own chartable
+ *  "section" of the questionnaire. */
+export function getScaleQuestions(): CapabilityScaleQuestion[] {
+    return CAPABILITY_QUESTIONS.filter((q): q is CapabilityScaleQuestion => q.type === 'scale')
+}
+
+/** The 3 lighter "texture" questions — not chartable as a rating, so they're
+ *  grouped into one combined "Working Style" section instead. */
+export function getChoiceQuestions(): CapabilityChoiceQuestion[] {
+    return CAPABILITY_QUESTIONS.filter((q): q is CapabilityChoiceQuestion => q.type === 'choice')
+}
+
 export interface CapabilityChartPoint {
     category: string
     value: number

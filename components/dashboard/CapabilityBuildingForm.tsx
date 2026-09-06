@@ -36,8 +36,13 @@ const AUTO_ADVANCE_DELAY_MS = 500
  * dependency entirely and always takes that mocked path.
  */
 export default function CapabilityBuildingForm({ initialAnswers, onClose, onCompleted }: CapabilityBuildingFormProps) {
+    // Opening this after it's already complete (the StepCard's "Want to
+    // re-fill the form?" affordance) must land on the splash → taking flow
+    // like any other visit, not skip straight to the "done" screen — the
+    // whole point of reopening it is to answer again, prefilled from
+    // `initialAnswers`, not to be told it's already finished.
     const alreadyComplete = isCapabilityFormComplete(initialAnswers)
-    const [phase, setPhase] = useState<Phase>(alreadyComplete ? 'done' : 'splash')
+    const [phase, setPhase] = useState<Phase>('splash')
     const [index, setIndex] = useState(0)
     const [answers, setAnswers] = useState<CapabilityAnswers>(initialAnswers)
     const [starKey, setStarKey] = useState(0)
@@ -114,16 +119,20 @@ export default function CapabilityBuildingForm({ initialAnswers, onClose, onComp
                             <div className="mx-auto w-16 h-16 rounded-full bg-pod-primary-light flex items-center justify-center">
                                 <Sparkles className="w-7 h-7 text-pod-primary" />
                             </div>
-                            <h3 className="mt-4 text-base font-bold text-pod-text">A few quick questions about how you work</h3>
+                            <h3 className="mt-4 text-base font-bold text-pod-text">
+                                {alreadyComplete ? 'Update your answers' : 'A few quick questions about how you work'}
+                            </h3>
                             <p className="mt-2 text-sm text-pod-muted">
-                                {total} short questions, about 2 minutes. There are no right answers — this just helps us understand you better.
+                                {alreadyComplete
+                                    ? `Go through all ${total} questions again and change anything you'd like — your previous answers are already filled in.`
+                                    : `${total} short questions, about 2 minutes. There are no right answers — this just helps us understand you better.`}
                             </p>
                             <button
                                 type="button"
                                 onClick={() => setPhase('taking')}
                                 className="mt-6 px-6 py-2.5 bg-pod-primary text-pod-primary-foreground rounded-lg text-sm font-bold hover:bg-pod-primary-hover transition"
                             >
-                                Begin
+                                {alreadyComplete ? 'Continue' : 'Begin'}
                             </button>
                         </div>
                     )}

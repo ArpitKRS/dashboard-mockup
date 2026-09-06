@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
+import { pdf } from '@react-pdf/renderer'
 import {
     MOCK_RESUME_SKILLS,
     MOCK_RESUME_INTERESTS,
@@ -9,11 +10,13 @@ import {
     MOCK_RESUME_ROLES,
     type ResumeRoleSummary,
 } from './mockResumeData'
-import { type CapabilityAnswers, isCapabilityFormComplete } from '@/lib/capabilityForm'
+import { type CapabilityAnswers, type CapabilityAnswer, isCapabilityFormComplete } from '@/lib/capabilityForm'
+import { getRoleSkillProfile, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
 import ProfileBanner from './ProfileBanner'
-import CareerPathSection from './CareerPathSection'
+import ProfileCapabilityReflection from './ProfileCapabilityReflection'
 import ProgressCountsPanel from './ProgressCountsPanel'
 import CapabilityBuildingForm from './CapabilityBuildingForm'
+import DashboardPdfDocument from './DashboardPdfDocument'
 
 // How long the mocked "analyzing" state lasts before the resume data lands —
 // see handleResumeFileSelected.
@@ -36,21 +39,27 @@ export default function DashboardClient() {
     const [capabilityAnswers, setCapabilityAnswers] = useState<CapabilityAnswers>({})
     const [capabilityCompletedAt, setCapabilityCompletedAt] = useState<string | null>(null)
 
-    // The Dashboard's own editable copy of what the resume produced — seeded
-    // from the (mock) upload, then freely editable via the header Edit
-    // toggle. Nothing here round-trips to a real backend; it's a mock-up.
+    // The Dashboard's own copy of what the resume produced.
     const [skills, setSkills] = useState<string[]>([])
     const [interests, setInterests] = useState<string[]>([])
     const [resumeSummary, setResumeSummary] = useState<string | null>(null)
     const [resumeRoles, setResumeRoles] = useState<ResumeRoleSummary[] | null>(null)
-    const [isEditingFields, setIsEditingFields] = useState(false)
+
+    // Lifted out of ProfileCapabilityReflection (rather than left local there)
+    // so the PDF export below can derive the same role/skill-gap data.
+    const [submittedGoal, setSubmittedGoal] = useState<string | null>(null)
 
     const [showCapabilityForm, setShowCapabilityForm] = useState(false)
+    const [isExporting, setIsExporting] = useState(false)
     const resumeFileInputRef = useRef<HTMLInputElement>(null)
 
     const resumeUploaded = Boolean(resumeFileName)
     const capabilityCompleted = Boolean(capabilityCompletedAt) || isCapabilityFormComplete(capabilityAnswers)
     const completionPct = (resumeUploaded ? 50 : 0) + (capabilityCompleted ? 50 : 0)
+
+    const roleProfile = submittedGoal ? getRoleSkillProfile(submittedGoal) : null
+    const skillGap = roleProfile ? computeSkillGap(skills, roleProfile.requiredSkills) : null
+    const capabilityGap = roleProfile ? computeCapabilityGap(capabilityAnswers, roleProfile.requiredCapabilities) : null
 
     // Picking a file simulates the resume-parse result with fixed mock data
     // regardless of what was picked — no modal, no backend call.
@@ -75,33 +84,88 @@ export default function DashboardClient() {
         setCapabilityCompletedAt(new Date().toISOString())
     }, [])
 
+    // A single category's graph gets edited on its own, without reopening
+    // the whole questionnaire — see CapabilityGraphGrid's per-card Edit.
+    const handleCapabilityAnswerChange = useCallback((questionId: string, answer: CapabilityAnswer) => {
+        setCapabilityAnswers(prev => ({ ...prev, [questionId]: answer }))
+    }, [])
+
+    // Builds a fresh DashboardPdfDocument from current state and downloads
+    // it as a real .pdf — via @react-pdf/renderer's own renderer, not a
+    // screenshot of the page, so there's no browser chrome, no "expandable"
+    // sections left collapsed, and no six-shape chart mess to rasterize.
+    const handleExportClick = useCallback(async () => {
+        if (isExporting) return
+        setIsExporting(true)
+        try {
+            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Dashboard'
+            const exportedAt = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+
+            const blob = await pdf(
+                <DashboardPdfDocument
+                    fullName={fullName}
+                    email={email}
+                    resumeFileName={resumeFileName}
+                    resumeSummary={resumeSummary}
+                    resumeRoles={resumeRoles}
+                    skills={skills}
+                    interests={interests}
+                    capabilityCompleted={capabilityCompleted}
+                    capabilityAnswers={capabilityAnswers}
+                    submittedGoal={submittedGoal}
+                    roleProfile={roleProfile}
+                    skillGap={skillGap}
+                    capabilityGap={capabilityGap}
+                    exportedAt={exportedAt}
+                />
+            ).toBlob()
+
+            const url = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = `${fullName.replace(/\s+/g, '-').toLowerCase() || 'profile'}-snapshot.pdf`
+            anchor.click()
+            URL.revokeObjectURL(url)
+            toast.success('Profile PDF downloaded.')
+        } catch (err) {
+            console.error('Failed to generate profile PDF:', err)
+            toast.error('Could not generate the PDF. Please try again.')
+        } finally {
+            setIsExporting(false)
+        }
+    }, [
+        isExporting, firstName, lastName, email, completionPct, resumeFileName, resumeSummary,
+        resumeRoles, skills, interests, capabilityCompleted, capabilityAnswers, submittedGoal,
+        roleProfile, skillGap, capabilityGap,
+    ])
+
     return (
         <div className="space-y-6">
             <ProfileBanner
                 firstName={firstName}
                 lastName={lastName}
                 email={email}
+                completionPct={completionPct}
+                capabilityAnswers={capabilityAnswers}
+                onExportClick={handleExportClick}
+                isExporting={isExporting}
             />
 
-            <CareerPathSection
+            <ProfileCapabilityReflection
                 completionPct={completionPct}
                 resumeUploaded={resumeUploaded}
                 resumeFileName={resumeFileName}
                 capabilityCompleted={capabilityCompleted}
                 capabilityAnswers={capabilityAnswers}
-                onUploadResumeClick={() => resumeFileInputRef.current?.click()}
-                onCapabilityFormClick={() => setShowCapabilityForm(true)}
-                firstName={firstName}
                 skills={skills}
                 interests={interests}
                 resumeSummary={resumeSummary}
                 resumeRoles={resumeRoles}
-                isEditing={isEditingFields}
-                onToggleEditing={() => setIsEditingFields(prev => !prev)}
-                onSkillsChange={setSkills}
-                onInterestsChange={setInterests}
-                onSummaryChange={setResumeSummary}
-                onRolesChange={setResumeRoles}
+                submittedGoal={submittedGoal}
+                onGoalSubmit={setSubmittedGoal}
+                onUploadResumeClick={() => resumeFileInputRef.current?.click()}
+                onCapabilityFormClick={() => setShowCapabilityForm(true)}
+                onAnswerChange={handleCapabilityAnswerChange}
             />
 
             <ProgressCountsPanel />
