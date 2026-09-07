@@ -19,6 +19,8 @@ export const MOCK_RESUME_INTERESTS = ['Product Design', 'Data Analysis']
 export const MOCK_RESUME_SUMMARY =
     'A versatile professional with a strong foundation in building user-facing applications and collaborating closely with cross-functional teams to ship reliable software.'
 
+export const MOCK_RESUME_EDUCATION = 'B.Tech in Computer Science, National Institute of Technology'
+
 export const MOCK_RESUME_ROLES: ResumeRoleSummary[] = [
     {
         title: 'Frontend Developer',
@@ -30,4 +32,18 @@ export const MOCK_RESUME_ROLES: ResumeRoleSummary[] = [
         description: 'Contributed to backend services and internal tooling, focusing on API development and test coverage.',
         duration: '1 yr 6 mos',
     },
+]
+
+/** A certification mentioned on the resume — rendered as a trophy-case
+ *  "Achievements" badge (see ProfileCapabilityReflection's ResumeSnapshot),
+ *  game/LeetCode-style, rather than as another plain tag or bullet. */
+export interface ResumeCertification {
+    title: string
+    issuer: string
+}
+
+export const MOCK_RESUME_CERTIFICATIONS: ResumeCertification[] = [
+    { title: 'AWS Certified Solutions Architect – Associate', issuer: 'Amazon Web Services' },
+    { title: 'Certified Scrum Master', issuer: 'Scrum Alliance' },
+    { title: 'Meta Front-End Developer Professional Certificate', issuer: 'Meta' },
 ]

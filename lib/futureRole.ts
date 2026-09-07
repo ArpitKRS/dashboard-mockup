@@ -102,6 +102,99 @@ export function getRoleSkillProfile(goalTitle: string): RoleSkillProfile {
     }
 }
 
+/** Same shape as RoleSkillProfile minus roleTitle (the archetype's own
+ *  display title lives in ProfileCapabilityReflection's FUTURE_ARCHETYPES —
+ *  this only needs to contribute requirements, keyed by the same 6 ids). */
+export interface ArchetypeProfile {
+    title: string
+    requiredSkills: string[]
+    requiredCapabilities: RequiredCapability[]
+}
+
+const ARCHETYPE_PROFILES: Record<string, ArchetypeProfile> = {
+    leader: {
+        title: 'The Leader',
+        requiredSkills: ['Team Leadership', 'Strategic Planning', 'Culture Building', 'Decision Making'],
+        requiredCapabilities: [
+            { category: 'Leadership', targetLevel: 5 },
+            { category: 'Communication', targetLevel: 4 },
+        ],
+    },
+    innovator: {
+        title: 'The Innovator',
+        requiredSkills: ['Prototyping', 'Experimentation', 'Emerging Tech', 'Creative Problem Solving'],
+        requiredCapabilities: [
+            { category: 'Problem-Solving', targetLevel: 5 },
+            { category: 'Adaptability', targetLevel: 4 },
+        ],
+    },
+    expert: {
+        title: 'The Expert',
+        requiredSkills: ['Deep Technical Mastery', 'Mentoring', 'Best Practices', 'Documentation'],
+        requiredCapabilities: [
+            { category: 'Technical Confidence', targetLevel: 5 },
+            { category: 'Problem-Solving', targetLevel: 4 },
+        ],
+    },
+    creator: {
+        title: 'The Creator',
+        requiredSkills: ['Design Thinking', 'Prototyping', 'Storytelling', 'Craftsmanship'],
+        requiredCapabilities: [
+            { category: 'Adaptability', targetLevel: 4 },
+            { category: 'Technical Confidence', targetLevel: 4 },
+        ],
+    },
+    connector: {
+        title: 'The Connector',
+        requiredSkills: ['Stakeholder Management', 'Networking', 'Facilitation', 'Cross-team Collaboration'],
+        requiredCapabilities: [
+            { category: 'Collaboration', targetLevel: 5 },
+            { category: 'Communication', targetLevel: 4 },
+        ],
+    },
+    changemaker: {
+        title: 'The Changemaker',
+        requiredSkills: ['Systems Thinking', 'Change Management', 'Advocacy', 'Root-cause Analysis'],
+        requiredCapabilities: [
+            { category: 'Adaptability', targetLevel: 5 },
+            { category: 'Leadership', targetLevel: 4 },
+        ],
+    },
+}
+
+export function getArchetypeProfile(archetypeId: string | null): ArchetypeProfile | null {
+    if (!archetypeId) return null
+    return ARCHETYPE_PROFILES[archetypeId] ?? null
+}
+
+/** Merges a typed role's requirements with a chosen 5-10-year archetype's —
+ *  skills deduped by name, capabilities deduped by category (keeping the
+ *  higher target level when both name the same one) — so the roadmap
+ *  reflects both "the role you typed" and "who you picked to become",
+ *  rather than only whichever was filled in last. roleTitle prefers the
+ *  typed role's (more specific) title, falling back to the archetype's only
+ *  when no role has been typed yet. */
+export function mergeRoleAndArchetype(
+    role: RoleSkillProfile | null,
+    archetype: ArchetypeProfile | null
+): RoleSkillProfile | null {
+    if (!role && !archetype) return null
+    if (!archetype) return role
+    if (!role) {
+        return { roleTitle: archetype.title, requiredSkills: archetype.requiredSkills, requiredCapabilities: archetype.requiredCapabilities }
+    }
+
+    const skills = Array.from(new Set([...role.requiredSkills, ...archetype.requiredSkills]))
+
+    const targetByCategory = new Map<CapabilityCategory, number>()
+    for (const c of [...role.requiredCapabilities, ...archetype.requiredCapabilities]) {
+        targetByCategory.set(c.category, Math.max(targetByCategory.get(c.category) ?? 0, c.targetLevel))
+    }
+    const capabilities = Array.from(targetByCategory.entries()).map(([category, targetLevel]) => ({ category, targetLevel }))
+
+    return { roleTitle: role.roleTitle, requiredSkills: skills, requiredCapabilities: capabilities }
+}
+
 export interface SkillGap {
     matched: string[]
     gaps: string[]

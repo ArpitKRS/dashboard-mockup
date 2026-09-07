@@ -1,12 +1,27 @@
-import { Document, Page, View, Text, StyleSheet, Svg, Path, Circle, Rect, Line, Polygon } from '@react-pdf/renderer'
-import { getScaleQuestions, getChoiceQuestions, type CapabilityAnswers, type CapabilityScaleQuestion } from '@/lib/capabilityForm'
+import { Document, Page, View, Text, StyleSheet, Svg, Path, Circle, Polygon, Line } from '@react-pdf/renderer'
 import {
-    CATEGORY_ACCENTS,
-    CATEGORY_VISUAL_KIND,
-    CATEGORY_TINTS,
-    WORKING_STYLE_TINTS,
-    TIER_BY_VALUE,
-    type CapabilityVisualKind,
+    CAPABILITY_QUESTIONS,
+    deriveProficiencyCompetencyAverages,
+    deriveNumericSelfRatingPoints,
+    type CapabilityAnswers,
+    type CapabilityAnswer,
+    type CapabilityTextQuestion,
+    type CapabilityMultiScaleQuestion,
+    type CapabilityDiagnosticQuestion,
+    type CapabilityRankQuestion,
+    type CapabilityProficiencyMatrixQuestion,
+    type CapabilityHabitChecklistQuestion,
+} from '@/lib/capabilityForm'
+import {
+    radarPoint,
+    radarPolygonPoints,
+    podiumBlockPaths,
+    PODIUM_BLOCK_COLORS,
+    PODIUM_LAYOUT,
+    PODIUM_GROUND_Y,
+    PODIUM_VIEWBOX,
+    HABIT_TIER_HEX,
+    PROFICIENCY_RADAR_LABELS,
 } from '@/lib/capabilityVisuals'
 import { SECTIONS as PROGRESS_SECTIONS } from './ProgressCountsPanel'
 import type { ResumeRoleSummary } from './mockResumeData'
@@ -66,23 +81,28 @@ const styles = StyleSheet.create({
     insightRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
     insightBox: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 8 },
     insightText: { fontSize: 8 },
-    categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
-    categoryCard: { width: '31%', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 8 },
-    categoryHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    categoryName: { fontSize: 8, fontWeight: 'bold', textTransform: 'uppercase' },
-    tierBadge: { fontSize: 6.5, fontWeight: 'bold', textTransform: 'uppercase', paddingVertical: 1, paddingHorizontal: 5, borderRadius: 8 },
-    categoryVisualRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    categoryLabelSub: { fontSize: 7.5, color: '#6E6E6E' },
-    visualOverlayCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-    visualOverlayBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
-    visualNumber: { fontSize: 10, fontWeight: 'bold', color: '#26302B' },
-    readoutRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    readoutValue: { fontSize: 10, fontWeight: 'bold', color: '#26302B' },
-    readoutMax: { fontSize: 8, fontWeight: 'normal', color: '#6E6E6E' },
-    workingStyleContainer: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, backgroundColor: '#F7F7F7', padding: 10 },
-    workingStyleGrid: { flexDirection: 'row', gap: 8 },
-    workingStyleBox: { flex: 1, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, padding: 8, alignItems: 'center' },
-    workingStyleLabel: { fontSize: 7.5, fontWeight: 'bold', textAlign: 'center', marginTop: 2 },
+    // One style family per Capability Snapshot question card — replaces the
+    // old category-grid/working-style styles now that no question is a
+    // plain 'scale'/'choice' pair anymore.
+    qCard: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 10, marginBottom: 10 },
+    qCardTitle: { fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 },
+    qCardQuote: { fontSize: 9, fontStyle: 'italic', color: '#26302B' },
+    qCardMuted: { fontSize: 9, color: '#6E6E6E' },
+    qCardMeta: { fontSize: 7.5, color: '#6E6E6E', marginTop: 6, textAlign: 'center' },
+    diagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    diagCell: { width: '48%', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, backgroundColor: '#FFFFFF', padding: 8 },
+    diagCellLabel: { fontSize: 8, fontWeight: 'bold', marginBottom: 3 },
+    tagsWrapSmall: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    tagChipSmall: { fontSize: 7.5, fontWeight: 'bold', color: '#8DCFB3', backgroundColor: '#EDF8F3', borderRadius: 8, paddingVertical: 2, paddingHorizontal: 6 },
+    habitGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    habitCell: { width: '31%', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 6, backgroundColor: '#FFFFFF', padding: 6 },
+    habitCellLabel: { fontSize: 7, fontWeight: 'bold', color: '#26302B' },
+    habitCellValue: { fontSize: 7, fontWeight: 'bold', color: '#6E6E6E', marginTop: 2 },
+    medalRow: { flexDirection: 'row', gap: 8, width: '100%' },
+    medalCard: { flex: 1, borderWidth: 1.5, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 6, alignItems: 'center' },
+    medalBadge: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+    medalBadgeText: { fontSize: 9, fontWeight: 'bold', color: '#FFFFFF' },
+    medalLabel: { fontSize: 8, fontWeight: 'bold', color: '#26302B', textAlign: 'center' },
     checklistItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 },
     checkDot: { width: 8, height: 8, borderRadius: 4 },
     progressGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -139,7 +159,7 @@ function ResumeSection({
 
             {resumeSummary && (
                 <View style={{ marginBottom: 10 }}>
-                    <Text style={styles.label}>Summary</Text>
+                    <Text style={styles.label}>Current Capability</Text>
                     <Text style={[styles.muted, { marginTop: 2 }]}>{resumeSummary}</Text>
                 </View>
             )}
@@ -179,314 +199,316 @@ function ResumeSection({
     )
 }
 
-// ── The six capability chart forms, drawn with react-pdf's SVG primitives ──
-// (lucide-react icons, which the web grid uses, are DOM components and can't
-// render inside react-pdf's own renderer) — matched 1:1 to CategoryGauge /
-// StarsVisual / GaugeVisual / BatteryVisual / BarsVisual / NodesVisual in
-// CapabilityGraphGrid.tsx via CATEGORY_VISUAL_KIND, so a category draws the
-// same shape on the page as it does on screen.
+// ── One bespoke visual per Capability Snapshot question, drawn with
+// react-pdf's SVG/View/Text primitives (lucide-react icons and CapabilityGraphGrid's
+// DOM elements can't render inside react-pdf's own renderer). No emoji: react-pdf's
+// core Helvetica font only covers WinAnsi encoding, not Unicode emoji, so every emoji
+// used on the web (question titles, habit tiers, medals) is dropped here in favor of
+// plain text/color — same convention already established for the old Working Style
+// section. Shared geometry (radarPoint/radarPolygonPoints/podiumBlockPaths/
+// PODIUM_LAYOUT) comes from lib/capabilityVisuals.ts so the web and PDF plot the exact
+// same shapes from the exact same answers.
 
-interface VisualProps {
-    value: number | null
-    min: number
+/** N-axis radar — the shared shape for Curiosity Drive (4 axes) and the
+ *  Proficiency Matrix (8 axes). Axis labels are absolutely-positioned Views
+ *  over the Svg (not drawn inside it): react-pdf's Svg has no reliable way
+ *  to host arbitrary positioned text, same reasoning as the numeric overlays
+ *  on the old ring/gauge visuals. */
+function PdfRadarChart({
+    axes,
+    values,
+    max,
+    accent,
+    size = 180,
+}: {
+    axes: string[]
+    values: (number | null)[]
     max: number
     accent: string
-}
+    size?: number
+}) {
+    const cx = size / 2
+    const cy = size / 2
+    const radius = size / 2 - 38
+    const ringFractions = [0.25, 0.5, 0.75, 1]
 
-function starPoints(cx: number, cy: number, outerR: number, innerR: number): string {
-    const pts: string[] = []
-    for (let i = 0; i < 10; i++) {
-        const angle = (Math.PI / 5) * i - Math.PI / 2
-        const r = i % 2 === 0 ? outerR : innerR
-        pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`)
-    }
-    return pts.join(' ')
-}
-
-// react-pdf's SVG type surface has strokeDasharray but not strokeDashoffset
-// (confirmed against node_modules/@react-pdf/types/svg.d.ts) — so a "partial
-// ring/arc" fill can't use the usual dasharray+dashoffset trick. Instead,
-// the filled portion is its own arc path computed from actual start/end
-// angles (0°=3 o'clock, clockwise, matching SVG's y-down convention).
-function polarPoint(cx: number, cy: number, r: number, angleDeg: number) {
-    const rad = (angleDeg * Math.PI) / 180
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
-}
-
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
-    const start = polarPoint(cx, cy, r, startAngle)
-    const end = polarPoint(cx, cy, r, endAngle)
-    const largeArc = endAngle - startAngle <= 180 ? 0 : 1
-    return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`
-}
-
-/** "value / max" readout — the web version's ValueReadout, reused beside the
- *  four visuals (stars, battery, bars, nodes) that don't have room to print
- *  the number inside the shape itself the way Ring/Gauge do. */
-function ValueReadout({ value, max }: { value: number | null; max: number }) {
     return (
-        <Text style={styles.readoutValue}>
-            {value ?? '–'} <Text style={styles.readoutMax}>/ {max}</Text>
-        </Text>
+        <View style={{ position: 'relative', width: size, height: size }}>
+            <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                {ringFractions.map(f => (
+                    <Polygon
+                        key={f}
+                        points={axes.map((_, i) => { const p = radarPoint(i, axes.length, radius * f, cx, cy); return `${p.x},${p.y}` }).join(' ')}
+                        fill="none"
+                        stroke="#E5E7EB"
+                        strokeWidth={1}
+                    />
+                ))}
+                {axes.map((_, i) => {
+                    const p = radarPoint(i, axes.length, radius, cx, cy)
+                    return <Line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#E5E7EB" strokeWidth={1} />
+                })}
+                <Polygon points={radarPolygonPoints(values, max, cx, cy, radius)} fill={accent} fillOpacity={0.2} stroke={accent} strokeWidth={2} />
+                {values.map((v, i) => {
+                    if (v == null) return null
+                    const p = radarPoint(i, axes.length, (Math.max(v, 0) / max) * radius, cx, cy)
+                    return <Circle key={i} cx={p.x} cy={p.y} r={2.5} fill={accent} />
+                })}
+            </Svg>
+            {axes.map((label, i) => {
+                const p = radarPoint(i, axes.length, radius + 22, cx, cy)
+                return (
+                    <View key={i} style={{ position: 'absolute', left: p.x - 30, top: p.y - 6, width: 60, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 6.5, fontWeight: 'bold', textAlign: 'center' }}>{label}</Text>
+                    </View>
+                )
+            })}
+        </View>
     )
 }
 
-function RingVisual({ value, min, max, accent }: VisualProps) {
-    const r = 15, cx = 19, cy = 19
-    const pct = max > min && value != null ? (value - min + 1) / (max - min + 1) : 0
-    // A near-360° arc's start/end points round to the same coordinate at
-    // toFixed(2) precision and silently draw nothing — a full ring is drawn
-    // as a plain Circle instead of chasing that precision edge case, and a
-    // real one (rating something max/max) is common, not rare.
-    const isFull = pct >= 0.999
-    const endAngle = -90 + pct * 360
+function PdfTextCard({ question, answer }: { question: CapabilityTextQuestion; answer: CapabilityAnswer | undefined }) {
+    const text = answer?.type === 'text' ? answer.value : null
     return (
-        <View style={{ position: 'relative', width: 38, height: 38 }}>
-            <Svg width={38} height={38} viewBox="0 0 38 38">
-                <Circle cx={cx} cy={cy} r={r} stroke="#EEF0EF" strokeWidth={5} fill="none" />
-                {isFull ? (
-                    <Circle cx={cx} cy={cy} r={r} stroke={accent} strokeWidth={5} fill="none" />
-                ) : pct > 0 ? (
-                    <Path d={describeArc(cx, cy, r, -90, endAngle)} stroke={accent} strokeWidth={5} fill="none" strokeLinecap="round" />
-                ) : null}
-            </Svg>
-            <View style={styles.visualOverlayCenter}>
-                <Text style={styles.visualNumber}>{value ?? '–'}</Text>
+        <View style={[styles.qCard, { backgroundColor: '#EFF6FF' }]} wrap={false}>
+            <Text style={styles.qCardTitle}>Future Study Plans</Text>
+            <Text style={text ? styles.qCardQuote : styles.qCardMuted}>{text ? `"${text}"` : 'Not answered yet'}</Text>
+        </View>
+    )
+}
+
+function PdfMultiScaleCard({ question, answers }: { question: CapabilityMultiScaleQuestion; answers: CapabilityAnswers }) {
+    const answer = answers[question.id]
+    const scores = answer?.type === 'multi-scale' ? answer.scores : {}
+    const axes = question.dimensions.map(d => d.label.split(' (')[0])
+    const values = question.dimensions.map(d => scores[d.id]?.value ?? null)
+    const answeredCount = values.filter(v => v != null).length
+
+    return (
+        <View style={[styles.qCard, { backgroundColor: '#FFFBEB' }]} wrap={false}>
+            <Text style={styles.qCardTitle}>{question.title}</Text>
+            <View style={{ alignItems: 'center' }}>
+                <PdfRadarChart axes={axes} values={values} max={question.max} accent="#F59E0B" />
+                <Text style={styles.qCardMeta}>{answeredCount}/{question.dimensions.length} rated</Text>
             </View>
         </View>
     )
 }
 
-function StarsVisual({ value, min, max, accent }: VisualProps) {
-    const count = max - min + 1
-    const filled = value != null ? value - min + 1 : 0
-    const step = 13
-    const width = count * step
-    return (
-        <View style={styles.readoutRow}>
-            <Svg width={width} height={14} viewBox={`0 0 ${width} 14`}>
-                {Array.from({ length: count }).map((_, i) => {
-                    const isFilled = i < filled
-                    return (
-                        <Polygon
-                            key={i}
-                            points={starPoints(i * step + step / 2, 7, 6, 2.4)}
-                            fill={isFilled ? accent : '#FFFFFF'}
-                            stroke={isFilled ? accent : '#D1D5DB'}
-                            strokeWidth={0.75}
-                        />
-                    )
-                })}
-            </Svg>
-            <ValueReadout value={value} max={max} />
-        </View>
-    )
-}
+function PdfProficiencyCard({ question, answers }: { question: CapabilityProficiencyMatrixQuestion; answers: CapabilityAnswers }) {
+    const averages = deriveProficiencyCompetencyAverages(question, answers)
+    const axes = averages.map(a => PROFICIENCY_RADAR_LABELS[a.competencyId] ?? a.title)
+    const values = averages.map(a => a.average)
+    const answeredCount = averages.reduce((sum, a) => sum + a.answeredCount, 0)
+    const totalCount = averages.reduce((sum, a) => sum + a.indicatorCount, 0)
 
-/** Half-circle speedometer arc — a full grey background semicircle (fixed
- *  path, left to right), with the accent-colored fill drawn as its own
- *  partial arc from the same left start point, swept clockwise by `pct` of
- *  the 180° span (see the note above RingVisual on why not dash-offset). */
-function GaugeVisual({ value, min, max, accent }: VisualProps) {
-    const r = 16, cx = 20, cy = 20
-    const pct = max > min && value != null ? (value - min) / (max - min) : 0
-    const backgroundD = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`
-    const endAngle = 180 + pct * 180
     return (
-        <View style={{ position: 'relative', width: 40, height: 22 }}>
-            <Svg width={40} height={22} viewBox="0 0 40 22">
-                <Path d={backgroundD} stroke="#EEF0EF" strokeWidth={5} fill="none" strokeLinecap="round" />
-                {pct > 0 && (
-                    <Path d={describeArc(cx, cy, r, 180, endAngle)} stroke={accent} strokeWidth={5} fill="none" strokeLinecap="round" />
-                )}
-            </Svg>
-            <View style={styles.visualOverlayBottom}>
-                <Text style={styles.visualNumber}>{value ?? '–'}</Text>
+        <View style={[styles.qCard, { backgroundColor: '#EEF2FF' }]} wrap={false}>
+            <Text style={styles.qCardTitle}>{question.title}</Text>
+            <View style={{ alignItems: 'center' }}>
+                <PdfRadarChart axes={axes} values={values} max={question.max} accent="#6366F1" size={210} />
+                <Text style={styles.qCardMeta}>{answeredCount}/{totalCount} indicators rated</Text>
             </View>
         </View>
     )
 }
 
-function BatteryVisual({ value, min, max, accent }: VisualProps) {
-    const pct = max > min && value != null ? (value - min + 1) / (max - min + 1) : 0
-    const w = 16, h = 38
-    const fillH = pct * (h - 6)
+/** The same 3D-ish podium as the web (front/top/side faces per block, via
+ *  podiumBlockPaths + PODIUM_LAYOUT) — flattened into one Path list rather
+ *  than grouped, since react-pdf's Svg primitive set has no <G>. A plain
+ *  ranked list underneath backs up the on-block labels, since an 8pt name
+ *  centered over a 70pt-wide block can legitimately run out of room. */
+function PdfPodiumCard({ question, answers }: { question: CapabilityRankQuestion; answers: CapabilityAnswers }) {
+    const answer = answers[question.id]
+    const ranking = answer?.type === 'rank' ? answer.ranking : {}
+    const rankedCount = Object.keys(ranking).length
+    const podiumPaths = PODIUM_LAYOUT.flatMap(block => {
+        const paths = podiumBlockPaths(block.x, block.width, PODIUM_GROUND_Y, block.height)
+        const colors = PODIUM_BLOCK_COLORS[block.rank]
+        return [
+            { key: `${block.rank}-side`, d: paths.side, fill: colors.side },
+            { key: `${block.rank}-top`, d: paths.top, fill: colors.top },
+            { key: `${block.rank}-front`, d: paths.front, fill: colors.front },
+        ]
+    })
+
     return (
-        <View style={styles.readoutRow}>
-            <Svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-                <Rect x={1} y={1} width={w - 2} height={h - 2} rx={(w - 2) / 2} fill="#FFFFFF" stroke={accent} strokeOpacity={0.4} strokeWidth={1.5} />
-                <Rect x={4} y={h - 3 - fillH} width={w - 8} height={fillH} rx={(w - 8) / 2} fill={accent} />
-            </Svg>
-            <ValueReadout value={value} max={max} />
+        <View style={[styles.qCard, { backgroundColor: '#F7F7F7' }]} wrap={false}>
+            <Text style={styles.qCardTitle}>Top Drivers</Text>
+            <View style={{ alignItems: 'center' }}>
+                <View style={{ position: 'relative', width: PODIUM_VIEWBOX.width, height: PODIUM_VIEWBOX.height }}>
+                    <Svg width={PODIUM_VIEWBOX.width} height={PODIUM_VIEWBOX.height} viewBox={`0 0 ${PODIUM_VIEWBOX.width} ${PODIUM_VIEWBOX.height}`}>
+                        {podiumPaths.map(p => <Path key={p.key} d={p.d} fill={p.fill} />)}
+                    </Svg>
+                    {PODIUM_LAYOUT.map(block => (
+                        <View
+                            key={block.rank}
+                            style={{
+                                position: 'absolute',
+                                left: block.x, top: PODIUM_GROUND_Y - block.height,
+                                width: block.width, height: block.height,
+                                alignItems: 'center', justifyContent: 'center',
+                            }}
+                        >
+                            <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>{block.rank}</Text>
+                        </View>
+                    ))}
+                </View>
+                <View style={[styles.medalRow, { marginTop: 8 }]}>
+                    {PODIUM_LAYOUT.slice().sort((a, b) => a.rank - b.rank).map(block => {
+                        const option = question.options.find(o => ranking[o.id] === block.rank)
+                        const colors = PODIUM_BLOCK_COLORS[block.rank]
+                        return (
+                            <View key={block.rank} style={[styles.medalCard, { backgroundColor: colors.top, borderColor: colors.front }]}>
+                                <View style={[styles.medalBadge, { backgroundColor: colors.side }]}>
+                                    <Text style={styles.medalBadgeText}>{block.rank}</Text>
+                                </View>
+                                <Text style={styles.medalLabel}>{option?.label ?? 'Not ranked yet'}</Text>
+                            </View>
+                        )
+                    })}
+                </View>
+                <Text style={styles.qCardMeta}>{rankedCount}/{question.topN} ranked</Text>
+            </View>
         </View>
     )
 }
 
-function BarsVisual({ value, min, max, accent }: VisualProps) {
-    const steps = max - min + 1
-    const filled = value != null ? value - min + 1 : 0
-    const barW = 4, gap = 3, maxH = 24
-    const width = steps * (barW + gap)
+/** An item-level heatmap (each of the 12 habits tinted by its own tier) —
+ *  matches CapabilityGraphGrid's web card exactly; an aggregate count per
+ *  tier isn't as useful as seeing which specific habit needs work. */
+function PdfHabitCard({ question, answers }: { question: CapabilityHabitChecklistQuestion; answers: CapabilityAnswers }) {
+    const answer = answers[question.id]
+    const selections = answer?.type === 'habit-checklist' ? answer.selections : {}
+    const answeredCount = Object.values(selections).filter(Boolean).length
+
     return (
-        <View style={styles.readoutRow}>
-            <Svg width={width} height={maxH} viewBox={`0 0 ${width} ${maxH}`}>
-                {Array.from({ length: steps }).map((_, i) => {
-                    const h = maxH * (0.35 + (i / Math.max(steps - 1, 1)) * 0.65)
+        <View style={[styles.qCard, { backgroundColor: '#F0FDFA' }]} wrap={false}>
+            <Text style={styles.qCardTitle}>{question.title}</Text>
+            <View style={styles.habitGrid}>
+                {question.items.map(item => {
+                    const optionIndex = question.options.findIndex(o => o.id === selections[item.id])
+                    const option = optionIndex >= 0 ? question.options[optionIndex] : undefined
+                    const color = optionIndex >= 0 ? HABIT_TIER_HEX[optionIndex] : '#9CA3AF'
                     return (
-                        <Rect
-                            key={i}
-                            x={i * (barW + gap)}
-                            y={maxH - h}
-                            width={barW}
-                            height={h}
-                            rx={1}
-                            fill={i < filled ? accent : '#E5E7EB'}
-                        />
+                        <View key={item.id} style={styles.habitCell}>
+                            <Text style={styles.habitCellLabel}>{item.label}</Text>
+                            <Text style={[styles.habitCellValue, { color }]}>{option?.label ?? 'Not answered'}</Text>
+                        </View>
                     )
                 })}
-            </Svg>
-            <ValueReadout value={value} max={max} />
+            </View>
+            <Text style={[styles.qCardMeta, { textAlign: 'left', marginTop: 8 }]}>{answeredCount}/{question.items.length} answered</Text>
         </View>
     )
 }
 
-function NodesVisual({ value, min, max, accent }: VisualProps) {
-    const steps = max - min + 1
-    const filled = value != null ? value - min + 1 : 0
-    const nodeR = 3, gap = 15, pad = nodeR + 2
-    const width = (steps - 1) * gap + pad * 2
-    const cy = 8
-    const filledSpan = filled > 1 ? (filled - 1) * gap : 0
+/** Energy Dynamics and Growth Goals & Alignment share this one form — both
+ *  are diagnostic panels mixing (or, for Growth Goals, made entirely of)
+ *  free text with select-all-that-apply checklists. */
+function PdfDiagnosticCard({ question, answers, tint }: { question: CapabilityDiagnosticQuestion; answers: CapabilityAnswers; tint: string }) {
+    const answer = answers[question.id]
+    const rows = answer?.type === 'diagnostic-panel' ? answer.rows : {}
+
     return (
-        <View style={styles.readoutRow}>
-            <Svg width={width} height={16} viewBox={`0 0 ${width} 16`}>
-                <Line x1={pad} y1={cy} x2={width - pad} y2={cy} stroke="#E5E7EB" strokeWidth={2} />
-                {filledSpan > 0 && <Line x1={pad} y1={cy} x2={pad + filledSpan} y2={cy} stroke={accent} strokeWidth={2} />}
-                {Array.from({ length: steps }).map((_, i) => {
-                    const isFilled = i < filled
+        <View style={[styles.qCard, { backgroundColor: tint }]} wrap={false}>
+            <Text style={styles.qCardTitle}>{question.title}</Text>
+            <View style={styles.diagGrid}>
+                {question.rows.map(row => {
+                    const rowAnswer = rows[row.id]
+                    if (row.type === 'text') {
+                        const text = rowAnswer?.text?.trim()
+                        return (
+                            <View key={row.id} style={styles.diagCell}>
+                                <Text style={styles.diagCellLabel}>{row.label}</Text>
+                                <Text style={text ? styles.qCardQuote : styles.qCardMuted}>{text ? `"${text}"` : 'Not answered yet'}</Text>
+                            </View>
+                        )
+                    }
+                    const selected = row.options.filter(o => rowAnswer?.optionIds?.includes(o.id))
                     return (
-                        <Circle
-                            key={i}
-                            cx={pad + i * gap}
-                            cy={cy}
-                            r={nodeR}
-                            fill={isFilled ? accent : '#FFFFFF'}
-                            stroke={isFilled ? accent : '#D1D5DB'}
-                            strokeWidth={1.5}
-                        />
+                        <View key={row.id} style={styles.diagCell}>
+                            <Text style={styles.diagCellLabel}>{row.label}</Text>
+                            {selected.length > 0 ? (
+                                <View style={styles.tagsWrapSmall}>
+                                    {selected.map(o => <Text key={o.id} style={styles.tagChipSmall}>{o.label}</Text>)}
+                                </View>
+                            ) : (
+                                <Text style={styles.qCardMuted}>Not answered yet</Text>
+                            )}
+                        </View>
                     )
                 })}
-            </Svg>
-            <ValueReadout value={value} max={max} />
+            </View>
         </View>
     )
 }
 
-const VISUALS: Record<CapabilityVisualKind, (props: VisualProps) => React.ReactElement> = {
-    ring: RingVisual,
-    stars: StarsVisual,
-    gauge: GaugeVisual,
-    battery: BatteryVisual,
-    bars: BarsVisual,
-    nodes: NodesVisual,
-}
-
-/** "Strongest area" / "Growth focus" — mirrors CapabilityGraphGrid's own
- *  InsightBanner exactly (same reduce-to-extremes logic), just re-declared
- *  here since it renders with react-pdf primitives instead of DOM ones. */
-function CapabilityInsightBanner({ answers, questions }: { answers: CapabilityAnswers; questions: CapabilityScaleQuestion[] }) {
-    const rated = questions
-        .map(q => {
-            const answer = answers[q.id]
-            return { question: q, value: answer?.type === 'scale' ? answer.value : null }
-        })
-        .filter((r): r is { question: CapabilityScaleQuestion; value: number } => r.value != null)
-
-    if (rated.length < 2) return null
-
-    const strongest = rated.reduce((best, r) => (r.value > best.value ? r : best), rated[0])
-    const weakest = rated.reduce((worst, r) => (r.value < worst.value ? r : worst), rated[0])
-    if (strongest.question.category === weakest.question.category) return null
+/** "Strongest area" / "Growth focus" — pooled across the two numeric
+ *  self-rating questions (Curiosity Drive's dimensions + the Proficiency
+ *  Matrix's competency averages), mirroring CapabilityGraphGrid's own
+ *  CapabilityInsightBanner exactly, just re-declared with react-pdf
+ *  primitives instead of DOM ones. */
+function CapabilityInsightBanner({ answers }: { answers: CapabilityAnswers }) {
+    const points = deriveNumericSelfRatingPoints(answers)
+    if (points.length < 2) return null
+    const strongest = points.reduce((best, p) => (p.value > best.value ? p : best), points[0])
+    const weakest = points.reduce((worst, p) => (p.value < worst.value ? p : worst), points[0])
+    if (strongest.label === weakest.label) return null
 
     return (
         <View style={styles.insightRow} wrap={false}>
             <View style={[styles.insightBox, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
                 <Text style={[styles.insightText, { color: '#065F46' }]}>
                     <Text style={{ fontWeight: 'bold' }}>Strongest area: </Text>
-                    {strongest.question.category} ({strongest.value}/{strongest.question.max})
+                    {strongest.label} ({strongest.value.toFixed(1)}/10)
                 </Text>
             </View>
             <View style={[styles.insightBox, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
                 <Text style={[styles.insightText, { color: '#92400E' }]}>
                     <Text style={{ fontWeight: 'bold' }}>Growth focus: </Text>
-                    {weakest.question.category} ({weakest.value}/{weakest.question.max})
+                    {weakest.label} ({weakest.value.toFixed(1)}/10)
                 </Text>
             </View>
         </View>
     )
 }
 
-/** Six chart forms — one per self-rating category, matching the web grid
- *  exactly (see CATEGORY_VISUAL_KIND), each on its own tinted card (matching
- *  CATEGORY_TINTS) in a 3-column grid, same as the web version's card grid —
- *  plus the Working Style answers as their own tinted box row. `wrap={false}`
- *  throughout keeps a card/box from being split across a page break. Emoji
- *  glyphs aren't attempted for Working Style: react-pdf's core Helvetica font
- *  only covers WinAnsi encoding, not Unicode emoji, so the tinted box and its
- *  label carry the same information instead. */
+/** One card per Capability Building Form question, in the same order as the
+ *  web grid — stacked full-width rather than packed into a multi-column
+ *  grid, since a fixed A4 page reads better as a vertical list than a forced
+ *  responsive grid, but every card's own chart/content matches the web
+ *  version exactly. `wrap={false}` on each card keeps it from splitting
+ *  across a page break. */
 function CapabilitySection({ answers }: { answers: CapabilityAnswers }) {
-    const scaleQuestions = getScaleQuestions()
-    const choiceQuestions = getChoiceQuestions()
-
     return (
         <View>
-            <CapabilityInsightBanner answers={answers} questions={scaleQuestions} />
-
-            <View style={styles.categoryGrid}>
-                {scaleQuestions.map(question => {
-                    const answer = answers[question.id]
-                    const value = answer?.type === 'scale' ? answer.value : null
-                    const accent = CATEGORY_ACCENTS[question.category]
-                    const tint = CATEGORY_TINTS[question.category]
-                    const tier = value != null ? TIER_BY_VALUE[value] : null
-                    const Visual = VISUALS[CATEGORY_VISUAL_KIND[question.category]]
-
-                    return (
-                        <View key={question.id} style={[styles.categoryCard, { backgroundColor: tint }]} wrap={false}>
-                            <View style={styles.categoryHeadRow}>
-                                <Text style={styles.categoryName}>{question.category}</Text>
-                                {tier && <Text style={[styles.tierBadge, { backgroundColor: tier.bg, color: tier.fg }]}>{tier.label}</Text>}
-                            </View>
-                            <View style={styles.categoryVisualRow}>
-                                <Visual value={value} min={question.min} max={question.max} accent={accent} />
-                                <Text style={styles.categoryLabelSub}>
-                                    {value != null ? question.labels[value - question.min] : 'Not answered'}
-                                </Text>
-                            </View>
-                        </View>
-                    )
-                })}
-            </View>
-
-            {choiceQuestions.length > 0 && (
-                <View style={[styles.workingStyleContainer, { marginTop: 10 }]} wrap={false}>
-                    <Text style={[styles.label, { marginBottom: 8 }]}>Working Style</Text>
-                    <View style={styles.workingStyleGrid}>
-                        {choiceQuestions.map((question, i) => {
-                            const answer = answers[question.id]
-                            const option = answer?.type === 'choice' ? question.options.find(o => o.id === answer.optionId) : undefined
-                            return (
-                                <View
-                                    key={question.id}
-                                    style={[styles.workingStyleBox, { backgroundColor: WORKING_STYLE_TINTS[i % WORKING_STYLE_TINTS.length] }]}
-                                >
-                                    <Text style={styles.workingStyleLabel}>{option?.label ?? 'Not answered yet'}</Text>
-                                </View>
-                            )
-                        })}
-                    </View>
-                </View>
-            )}
+            <CapabilityInsightBanner answers={answers} />
+            {CAPABILITY_QUESTIONS.map(question => {
+                switch (question.type) {
+                    case 'text':
+                        return <PdfTextCard key={question.id} question={question} answer={answers[question.id]} />
+                    case 'multi-scale':
+                        return <PdfMultiScaleCard key={question.id} question={question} answers={answers} />
+                    case 'diagnostic-panel':
+                        return (
+                            <PdfDiagnosticCard
+                                key={question.id}
+                                question={question}
+                                answers={answers}
+                                tint={question.id === 'energy-dynamics' ? '#F5F3FF' : '#ECFDF5'}
+                            />
+                        )
+                    case 'rank':
+                        return <PdfPodiumCard key={question.id} question={question} answers={answers} />
+                    case 'proficiency-matrix':
+                        return <PdfProficiencyCard key={question.id} question={question} answers={answers} />
+                    case 'habit-checklist':
+                        return <PdfHabitCard key={question.id} question={question} answers={answers} />
+                    default:
+                        return null
+                }
+            })}
         </View>
     )
 }

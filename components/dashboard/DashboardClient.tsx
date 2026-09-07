@@ -8,13 +8,19 @@ import {
     MOCK_RESUME_INTERESTS,
     MOCK_RESUME_SUMMARY,
     MOCK_RESUME_ROLES,
+    MOCK_RESUME_EDUCATION,
+    MOCK_RESUME_CERTIFICATIONS,
     type ResumeRoleSummary,
+    type ResumeCertification,
 } from './mockResumeData'
 import { type CapabilityAnswers, type CapabilityAnswer, isCapabilityFormComplete } from '@/lib/capabilityForm'
-import { getRoleSkillProfile, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
+import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
 import ProfileBanner from './ProfileBanner'
+import CurrentCapabilityCard from './CurrentCapabilityCard'
 import ProfileCapabilityReflection from './ProfileCapabilityReflection'
 import ProgressCountsPanel from './ProgressCountsPanel'
+import TestimonialsSection from './TestimonialsSection'
+import CredentialsUploadSection from './CredentialsUploadSection'
 import CapabilityBuildingForm from './CapabilityBuildingForm'
 import DashboardPdfDocument from './DashboardPdfDocument'
 
@@ -44,10 +50,20 @@ export default function DashboardClient() {
     const [interests, setInterests] = useState<string[]>([])
     const [resumeSummary, setResumeSummary] = useState<string | null>(null)
     const [resumeRoles, setResumeRoles] = useState<ResumeRoleSummary[] | null>(null)
+    const [resumeEducation, setResumeEducation] = useState<string | null>(null)
+    const [resumeCertifications, setResumeCertifications] = useState<ResumeCertification[] | null>(null)
 
     // Lifted out of ProfileCapabilityReflection (rather than left local there)
     // so the PDF export below can derive the same role/skill-gap data.
     const [submittedGoal, setSubmittedGoal] = useState<string | null>(null)
+
+    // Manually-typed reflections for the Future Role & Roadmap tab — unlike
+    // submittedGoal, these never get computed against anything; they're the
+    // user's own words, lifted here only so a future PDF pass can include
+    // them the same way it already does for submittedGoal.
+    const [personalVisionStatement, setPersonalVisionStatement] = useState('')
+    const [sixTwelveMonthPlan, setSixTwelveMonthPlan] = useState('')
+    const [futureVisionArchetype, setFutureVisionArchetype] = useState<string | null>(null)
 
     const [showCapabilityForm, setShowCapabilityForm] = useState(false)
     const [isExporting, setIsExporting] = useState(false)
@@ -57,7 +73,12 @@ export default function DashboardClient() {
     const capabilityCompleted = Boolean(capabilityCompletedAt) || isCapabilityFormComplete(capabilityAnswers)
     const completionPct = (resumeUploaded ? 50 : 0) + (capabilityCompleted ? 50 : 0)
 
-    const roleProfile = submittedGoal ? getRoleSkillProfile(submittedGoal) : null
+    // Same merge as ProfileCapabilityReflection (the roadmap should reflect
+    // both the typed role and the picked archetype) — kept in sync here so
+    // the exported PDF's roadmap matches the web page exactly.
+    const baseRoleProfile = submittedGoal ? getRoleSkillProfile(submittedGoal) : null
+    const archetypeProfile = getArchetypeProfile(futureVisionArchetype)
+    const roleProfile = mergeRoleAndArchetype(baseRoleProfile, archetypeProfile)
     const skillGap = roleProfile ? computeSkillGap(skills, roleProfile.requiredSkills) : null
     const capabilityGap = roleProfile ? computeCapabilityGap(capabilityAnswers, roleProfile.requiredCapabilities) : null
 
@@ -74,6 +95,8 @@ export default function DashboardClient() {
             setInterests(prev => Array.from(new Set([...prev, ...MOCK_RESUME_INTERESTS])))
             setResumeSummary(MOCK_RESUME_SUMMARY)
             setResumeRoles(MOCK_RESUME_ROLES)
+            setResumeEducation(MOCK_RESUME_EDUCATION)
+            setResumeCertifications(MOCK_RESUME_CERTIFICATIONS)
             setResumeFileName(file.name)
             toast.success(`Resume imported: ${file.name}`, { id: 'dashboard-resume-upload' })
         }, MOCK_RESUME_PROCESSING_MS)
@@ -136,7 +159,7 @@ export default function DashboardClient() {
     }, [
         isExporting, firstName, lastName, email, completionPct, resumeFileName, resumeSummary,
         resumeRoles, skills, interests, capabilityCompleted, capabilityAnswers, submittedGoal,
-        roleProfile, skillGap, capabilityGap,
+        futureVisionArchetype, roleProfile, skillGap, capabilityGap,
     ])
 
     return (
@@ -147,28 +170,40 @@ export default function DashboardClient() {
                 email={email}
                 completionPct={completionPct}
                 capabilityAnswers={capabilityAnswers}
+                resumeUploaded={resumeUploaded}
+                resumeFileName={resumeFileName}
+                capabilityCompleted={capabilityCompleted}
+                onUploadResumeClick={() => resumeFileInputRef.current?.click()}
+                onCapabilityFormClick={() => setShowCapabilityForm(true)}
                 onExportClick={handleExportClick}
                 isExporting={isExporting}
             />
 
+            <CurrentCapabilityCard summary={resumeSummary} />
+
             <ProfileCapabilityReflection
                 completionPct={completionPct}
-                resumeUploaded={resumeUploaded}
-                resumeFileName={resumeFileName}
                 capabilityCompleted={capabilityCompleted}
                 capabilityAnswers={capabilityAnswers}
                 skills={skills}
                 interests={interests}
-                resumeSummary={resumeSummary}
                 resumeRoles={resumeRoles}
+                resumeCertifications={resumeCertifications}
                 submittedGoal={submittedGoal}
                 onGoalSubmit={setSubmittedGoal}
-                onUploadResumeClick={() => resumeFileInputRef.current?.click()}
-                onCapabilityFormClick={() => setShowCapabilityForm(true)}
+                personalVisionStatement={personalVisionStatement}
+                onPersonalVisionStatementChange={setPersonalVisionStatement}
+                sixTwelveMonthPlan={sixTwelveMonthPlan}
+                onSixTwelveMonthPlanChange={setSixTwelveMonthPlan}
+                futureVisionArchetype={futureVisionArchetype}
+                onFutureVisionArchetypeSelect={setFutureVisionArchetype}
                 onAnswerChange={handleCapabilityAnswerChange}
             />
 
             <ProgressCountsPanel />
+
+            <TestimonialsSection />
+            <CredentialsUploadSection />
 
             <input
                 ref={resumeFileInputRef}
@@ -181,6 +216,8 @@ export default function DashboardClient() {
             {showCapabilityForm && (
                 <CapabilityBuildingForm
                     initialAnswers={capabilityAnswers}
+                    firstName={firstName}
+                    resumeEducation={resumeEducation}
                     onClose={() => setShowCapabilityForm(false)}
                     onCompleted={handleCapabilityCompleted}
                 />

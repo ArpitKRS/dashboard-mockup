@@ -1,33 +1,53 @@
 'use client'
 
 import { useState } from 'react'
-import { FileUp, ClipboardList, Check, ArrowRight, Clock3, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Clock3, Trophy } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import CapabilityGraphGrid from './CapabilityGraphGrid'
 import CareerRoadmapMap from './CareerRoadmapMap'
-import { getRoleSkillProfile, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
+import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
 import type { CapabilityAnswers, CapabilityAnswer } from '@/lib/capabilityForm'
-import type { ResumeRoleSummary } from './mockResumeData'
+import type { ResumeRoleSummary, ResumeCertification } from './mockResumeData'
 
 type PanelId = 'current-role' | 'future-role'
 
+/** Single-select "which archetype describes your 5-10 year vision" prompt at
+ *  the top of Future Role & Roadmap — the two manual reflection fields below
+ *  it only appear once one of these is picked, since writing a vision
+ *  statement makes more sense once there's already a starting shape for it. */
+const FUTURE_ARCHETYPES = [
+    { id: 'leader', emoji: '👑', title: 'The Leader', description: 'Inspire teams, drive strategy, and shape culture' },
+    { id: 'innovator', emoji: '🚀', title: 'The Innovator', description: 'Build new things, push boundaries, and disrupt' },
+    { id: 'expert', emoji: '🎓', title: 'The Expert', description: 'Master your craft and become a go-to authority' },
+    { id: 'creator', emoji: '🎨', title: 'The Creator', description: 'Design, build, and bring ideas to life' },
+    { id: 'connector', emoji: '🤝', title: 'The Connector', description: 'Build relationships, bridge gaps, and unite people' },
+    { id: 'changemaker', emoji: '✨', title: 'The Changemaker', description: 'Transform systems, challenge norms, and create impact' },
+]
+
 interface ProfileCapabilityReflectionProps {
     completionPct: number
-    resumeUploaded: boolean
-    resumeFileName: string | null
     capabilityCompleted: boolean
     capabilityAnswers: CapabilityAnswers
     skills: string[]
     interests: string[]
-    resumeSummary: string | null
     resumeRoles: ResumeRoleSummary[] | null
+    resumeCertifications: ResumeCertification[] | null
     /** Lifted to DashboardClient (rather than owned here) so the PDF export —
      *  which needs the same role/skill-gap data — can derive it too, without
      *  threading a callback back up just to hand the computed value over. */
     submittedGoal: string | null
     onGoalSubmit: (goal: string) => void
-    onUploadResumeClick: () => void
-    onCapabilityFormClick: () => void
+    /** Manually-typed reflections (not derived from anything) for the Future
+     *  Role & Roadmap tab — also lifted to DashboardClient for the same
+     *  future-PDF-parity reason as submittedGoal. */
+    personalVisionStatement: string
+    onPersonalVisionStatementChange: (value: string) => void
+    sixTwelveMonthPlan: string
+    onSixTwelveMonthPlanChange: (value: string) => void
+    /** Which FUTURE_ARCHETYPES id is picked, if any — gates whether the two
+     *  fields above are shown at all. */
+    futureVisionArchetype: string | null
+    onFutureVisionArchetypeSelect: (archetypeId: string) => void
     onAnswerChange: (questionId: string, answer: CapabilityAnswer) => void
 }
 
@@ -42,29 +62,23 @@ function TagChip({ label }: { label: string }) {
 /** The resume-derived half of the profile, read-only here — editing lives on
  *  the Capability Building Form / re-upload flow, not inline in this view. */
 function ResumeSnapshot({
-    summary,
     roles,
     skills,
     interests,
+    certifications,
 }: {
-    summary: string | null
     roles: ResumeRoleSummary[] | null
     skills: string[]
     interests: string[]
+    certifications: ResumeCertification[] | null
 }) {
     const hasRoles = Boolean(roles && roles.length > 0)
     const hasTags = skills.length > 0 || interests.length > 0
-    if (!summary && !hasRoles && !hasTags) return null
+    const hasCertifications = Boolean(certifications && certifications.length > 0)
+    if (!hasRoles && !hasTags && !hasCertifications) return null
 
     return (
         <div className="space-y-5">
-            {summary && (
-                <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2">Summary</p>
-                    <p className="text-sm text-pod-text leading-relaxed">{summary}</p>
-                </div>
-            )}
-
             {hasRoles && (
                 <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Experience</p>
@@ -105,6 +119,23 @@ function ResumeSnapshot({
                     )}
                 </div>
             )}
+
+            {hasCertifications && (
+                <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Achievements</p>
+                    <div className="flex flex-wrap gap-4">
+                        {certifications!.map((cert, i) => (
+                            <div key={i} className="flex w-24 flex-col items-center text-center" title={`${cert.title} — ${cert.issuer}`}>
+                                <div className="h-14 w-14 shrink-0 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 ring-4 ring-amber-100 flex items-center justify-center shadow-sm">
+                                    <Trophy aria-hidden className="h-6 w-6 text-white" />
+                                </div>
+                                <p className="mt-2 text-[11px] font-semibold text-pod-text leading-snug line-clamp-2">{cert.title}</p>
+                                <p className="text-[10px] text-pod-muted truncate w-full">{cert.issuer}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -112,58 +143,6 @@ function ResumeSnapshot({
 // How long the mocked "matching your goal" state lasts before the roadmap
 // appears — mirrors DashboardClient's resume-mock delay.
 const MOCK_GOAL_GENERATION_MS = 900
-
-/** `compact` shrinks the card once both steps are done — at that point it's
- *  no longer the thing asking for attention, just a quiet "redo this?"
- *  affordance, so its `title` doubles as that hint on hover. */
-function StepCard({
-    label,
-    done,
-    compact,
-    icon: Icon,
-    onClick,
-    title,
-}: {
-    label: string
-    done: boolean
-    compact: boolean
-    icon: LucideIcon
-    onClick: () => void
-    title?: string
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            title={title}
-            className={`relative flex items-center gap-3 rounded-xl border text-left transition-all duration-200 ${
-                compact ? 'px-3 py-2.5' : 'px-4 py-4'
-            } ${
-                done
-                    ? 'border-pod-primary-medium bg-pod-primary-light'
-                    : 'border-pod-border bg-pod-bg-soft hover:border-pod-primary-medium'
-            }`}
-        >
-            <div
-                className={`shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 ${compact ? 'h-7 w-7' : 'h-9 w-9'} ${
-                    done ? 'bg-pod-primary text-pod-primary-foreground' : 'bg-white text-pod-primary'
-                }`}
-            >
-                <Icon className={compact ? 'h-3.5 w-3.5' : 'h-4.5 w-4.5'} />
-            </div>
-            <span className={`flex-1 min-w-0 truncate font-semibold text-pod-text ${compact ? 'text-xs' : 'text-sm'}`}>{label}</span>
-            {done && (
-                <span
-                    className={`ml-auto shrink-0 rounded-full bg-pod-primary text-pod-primary-foreground flex items-center justify-center transition-all duration-200 ${
-                        compact ? 'h-4 w-4' : 'h-5 w-5'
-                    }`}
-                >
-                    <Check className={compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
-                </span>
-            )}
-        </button>
-    )
-}
 
 /**
  * "Profile Capability Reflection" — a left-nav / right-panel layout
@@ -176,27 +155,36 @@ function StepCard({
  */
 export default function ProfileCapabilityReflection({
     completionPct,
-    resumeUploaded,
-    resumeFileName,
     capabilityCompleted,
     capabilityAnswers,
     skills,
     interests,
-    resumeSummary,
     resumeRoles,
+    resumeCertifications,
     submittedGoal,
     onGoalSubmit,
-    onUploadResumeClick,
-    onCapabilityFormClick,
+    personalVisionStatement,
+    onPersonalVisionStatementChange,
+    sixTwelveMonthPlan,
+    onSixTwelveMonthPlanChange,
+    futureVisionArchetype,
+    onFutureVisionArchetypeSelect,
     onAnswerChange,
 }: ProfileCapabilityReflectionProps) {
-    const isFullyComplete = completionPct === 100
+    const isFutureRoleUnlocked = completionPct >= 50
     const [panel, setPanel] = useState<PanelId>('current-role')
 
     const [futureGoalInput, setFutureGoalInput] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
 
-    const roleProfile = submittedGoal ? getRoleSkillProfile(submittedGoal) : null
+    // The roadmap should reflect both the role the user typed AND the
+    // archetype they picked above ("Where Do You See Yourself in 5-10
+    // Years?") — merged rather than whichever was filled in last, so
+    // picking an archetype alone still produces a roadmap, and typing a
+    // role after picking an archetype adds to it instead of replacing it.
+    const baseRoleProfile = submittedGoal ? getRoleSkillProfile(submittedGoal) : null
+    const archetypeProfile = getArchetypeProfile(futureVisionArchetype)
+    const roleProfile = mergeRoleAndArchetype(baseRoleProfile, archetypeProfile)
     const skillGap = roleProfile ? computeSkillGap(skills, roleProfile.requiredSkills) : null
     const capabilityGap = roleProfile ? computeCapabilityGap(capabilityAnswers, roleProfile.requiredCapabilities) : null
 
@@ -211,7 +199,7 @@ export default function ProfileCapabilityReflection({
     }
 
     const selectPanel = (id: PanelId) => {
-        if (id === 'future-role' && !isFullyComplete) return
+        if (id === 'future-role' && !isFutureRoleUnlocked) return
         setPanel(id)
     }
 
@@ -222,6 +210,19 @@ export default function ProfileCapabilityReflection({
                 <p className="text-sm text-pod-muted mt-1">
                     Build your current profile, then map it against where you want to go next.
                 </p>
+
+                <div className="mt-5">
+                    <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-semibold text-pod-text">Profile completion</span>
+                        <span className="text-sm font-bold text-pod-primary">{completionPct}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-pod-primary/10 overflow-hidden">
+                        <div
+                            className="h-full rounded-full bg-pod-primary transition-all duration-500"
+                            style={{ width: `${completionPct}%` }}
+                        />
+                    </div>
+                </div>
             </div>
 
             <div className="flex flex-col md:flex-row border-t border-pod-border">
@@ -238,10 +239,10 @@ export default function ProfileCapabilityReflection({
                     <button
                         type="button"
                         onClick={() => selectPanel('future-role')}
-                        disabled={!isFullyComplete}
-                        title={!isFullyComplete ? 'Complete your profile to unlock' : undefined}
+                        disabled={!isFutureRoleUnlocked}
+                        title={!isFutureRoleUnlocked ? 'Complete at least 50% of your profile to unlock' : undefined}
                         className={`flex-1 md:flex-none text-left px-3.5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                            !isFullyComplete
+                            !isFutureRoleUnlocked
                                 ? 'text-pod-muted/50 cursor-not-allowed'
                                 : panel === 'future-role' ? 'text-pod-primary' : 'text-pod-text hover:bg-pod-bg-soft'
                         }`}
@@ -253,41 +254,12 @@ export default function ProfileCapabilityReflection({
                 <div className="flex-1 min-w-0 p-6">
                     {panel === 'current-role' ? (
                         <div className="space-y-6">
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-sm font-semibold text-pod-text">Profile completion</span>
-                                    <span className="text-sm font-bold text-pod-primary">{completionPct}%</span>
-                                </div>
-                                <div className="h-2 w-full rounded-full bg-pod-primary/10 overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full bg-pod-primary transition-all duration-500"
-                                        style={{ width: `${completionPct}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <StepCard
-                                    label={resumeUploaded ? (resumeFileName ?? 'Resume uploaded') : 'Resume upload'}
-                                    done={resumeUploaded}
-                                    compact={completionPct === 100}
-                                    icon={FileUp}
-                                    onClick={onUploadResumeClick}
-                                    title={completionPct === 100 ? 'Want to upload a new resume?' : (resumeFileName ?? undefined)}
-                                />
-                                <StepCard
-                                    label="Capability Building Form"
-                                    done={capabilityCompleted}
-                                    compact={completionPct === 100}
-                                    icon={ClipboardList}
-                                    onClick={onCapabilityFormClick}
-                                    title={completionPct === 100 ? 'Want to re-fill the form?' : undefined}
-                                />
-                            </div>
-
-                            {resumeUploaded && (
-                                <ResumeSnapshot summary={resumeSummary} roles={resumeRoles} skills={skills} interests={interests} />
-                            )}
+                            <ResumeSnapshot
+                                roles={resumeRoles}
+                                skills={skills}
+                                interests={interests}
+                                certifications={resumeCertifications}
+                            />
 
                             {capabilityCompleted && (
                                 <CapabilityGraphGrid answers={capabilityAnswers} onAnswerChange={onAnswerChange} />
@@ -295,6 +267,65 @@ export default function ProfileCapabilityReflection({
                         </div>
                     ) : (
                         <div className="space-y-6">
+                            <div>
+                                <h3 className="text-base font-semibold text-pod-text">Where Do You See Yourself in 5-10 Years?</h3>
+                                <p className="mt-1 text-sm text-pod-muted">Pick the archetype that resonates with your vision.</p>
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {FUTURE_ARCHETYPES.map(archetype => {
+                                        const selected = futureVisionArchetype === archetype.id
+                                        return (
+                                            <button
+                                                key={archetype.id}
+                                                type="button"
+                                                onClick={() => onFutureVisionArchetypeSelect(archetype.id)}
+                                                className={`text-left rounded-xl border p-4 transition-colors ${
+                                                    selected
+                                                        ? 'border-pod-primary bg-pod-primary-light'
+                                                        : 'border-pod-border bg-pod-bg-soft hover:border-pod-primary-medium'
+                                                }`}
+                                            >
+                                                <span className="text-2xl">{archetype.emoji}</span>
+                                                <p className="mt-2 text-sm font-semibold text-pod-text">{archetype.title}</p>
+                                                <p className="mt-1 text-xs text-pod-muted leading-relaxed">{archetype.description}</p>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+
+                            {futureVisionArchetype && (
+                                <div className="space-y-5 max-w-xl">
+                                    <div>
+                                        <label htmlFor="personal-vision-input" className="block text-sm font-semibold text-pod-text mb-2">
+                                            Your personal vision / goal statement <span className="font-normal text-pod-muted">(optional)</span>
+                                        </label>
+                                        <textarea
+                                            id="personal-vision-input"
+                                            value={personalVisionStatement}
+                                            onChange={e => onPersonalVisionStatementChange(e.target.value)}
+                                            placeholder="Summarise what you want to be — your passion and talent…"
+                                            rows={3}
+                                            className="w-full rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition resize-y focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="six-twelve-month-plan-input" className="block text-sm font-semibold text-pod-text mb-2">
+                                            Plan for the next 6-12 months <span className="font-normal text-pod-muted">(optional)</span>
+                                        </label>
+                                        <textarea
+                                            id="six-twelve-month-plan-input"
+                                            value={sixTwelveMonthPlan}
+                                            onChange={e => onSixTwelveMonthPlanChange(e.target.value)}
+                                            placeholder="Your continuous, iterative plan in alignment with your vision…"
+                                            rows={3}
+                                            className="w-full rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition resize-y focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="border-t border-pod-border" />
+
                             <div className="max-w-xl">
                                 <label htmlFor="future-goal-input" className="sr-only">Future role</label>
                                 <div className="flex gap-2">
