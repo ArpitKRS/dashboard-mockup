@@ -1,7 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Trophy, ScrollText, Award, Upload, X, type LucideIcon } from 'lucide-react'
+import { Quote, Trophy, ScrollText, Award, Upload, X, type LucideIcon } from 'lucide-react'
+import UserAvatar from '@/components/ui/UserAvatar'
+import { MOCK_TESTIMONIALS } from './mockTestimonialsData'
 
 interface CredentialCategory {
     id: string
@@ -77,25 +79,52 @@ function UploadSlot({ category }: { category: CredentialCategory }) {
 }
 
 /**
- * A place to attach supporting documents — achievements, letters of
- * recommendation, and certificates earned from completing courses on this
- * platform. Distinct from the resume-parsed certifications already shown in
- * ProfileCapabilityReflection's ResumeSnapshot: those are read from a resume,
- * these are the actual documents the member attaches themselves. Entirely
- * mocked (local state only) — this mock-up has no backend or file storage.
+ * "Authenticated Capability" — what other people have said about this member,
+ * plus the supporting documents (achievements, letters of recommendation,
+ * platform course certificates) they attach themselves, as one combined
+ * card. Both halves are mocked: testimonials are fixed content (no backend
+ * to collect real ones from) and uploads are local-state-only dropzones
+ * (see DashboardClient's resume-upload input for the same pattern).
  */
-export default function CredentialsUploadSection() {
+export default function AuthenticatedCapabilitySection() {
     return (
         <article className="rounded-2xl border border-pod-border bg-white shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-pod-text">Achievements &amp; Credentials</h2>
+            <h2 className="text-lg font-semibold text-pod-text">Authenticated Capability</h2>
             <p className="text-sm text-pod-muted mt-1">
-                Add supporting documents to your profile — achievements, letters of recommendation, and certificates from courses you completed on this platform.
+                What others have said about working with you, plus the documents that back it up.
             </p>
 
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {CATEGORIES.map(category => (
-                    <UploadSlot key={category.id} category={category} />
-                ))}
+            <div className="mt-6">
+                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-3">Testimonials</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {MOCK_TESTIMONIALS.map(testimonial => (
+                        <div key={testimonial.name} className="rounded-xl border border-pod-border bg-pod-bg-soft p-4 flex flex-col">
+                            <Quote aria-hidden className="h-4 w-4 text-pod-primary mb-2" />
+                            <p className="text-xs leading-relaxed italic text-pod-text flex-1">
+                                &ldquo;{testimonial.quote}&rdquo;
+                            </p>
+                            <div className="flex items-center gap-2.5 mt-4 pt-3 border-t border-pod-border">
+                                <UserAvatar name={testimonial.name} size={32} />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-pod-text truncate">{testimonial.name}</p>
+                                    <p className="text-[11px] text-pod-muted truncate">{testimonial.relationship}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-pod-border">
+                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Achievements &amp; Credentials</p>
+                <p className="text-sm text-pod-muted mb-3">
+                    Add supporting documents to your profile — achievements, letters of recommendation, and certificates from courses you completed on this platform.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {CATEGORIES.map(category => (
+                        <UploadSlot key={category.id} category={category} />
+                    ))}
+                </div>
             </div>
         </article>
     )

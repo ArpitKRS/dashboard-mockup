@@ -41,7 +41,7 @@ export default function ProgressCountsPanel() {
 
     return (
         <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-pod-text px-1">Your Progress</h2>
+            <h2 className="text-lg font-semibold text-pod-text px-1">Status & Progress</h2>
             {SECTIONS.map(section => {
                 const summary = section.counts.unavailable
                     ? 'Unavailable'

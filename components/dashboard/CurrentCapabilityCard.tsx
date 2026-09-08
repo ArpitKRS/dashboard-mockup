@@ -2,7 +2,8 @@
  * The resume-derived summary paragraph, on its own — split out of
  * ProfileCapabilityReflection's ResumeSnapshot so it reads as its own
  * standalone statement rather than the first item in a longer list, sitting
- * between the Banner and Profile Capability Reflection.
+ * between the Banner and Dynamic Context (the ProfileCapabilityReflection
+ * component's heading).
  */
 export default function CurrentCapabilityCard({ summary }: { summary: string | null }) {
     if (!summary) return null

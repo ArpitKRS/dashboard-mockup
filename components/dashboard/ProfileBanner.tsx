@@ -134,20 +134,21 @@ export default function ProfileBanner({
                         }`}
                     >
                         {isExporting ? <Spinner size="sm" tone="inherit" /> : <Download className="h-3.5 w-3.5" />}
-                        {isExporting ? 'Preparing PDF…' : 'Export Profile'}
+                        {isExporting ? 'Preparing PDF…' : 'Share Visibility'}
                     </button>
                     <button
                         type="button"
                         onClick={() => isUnlocked && setShowSuggestion(true)}
                         disabled={!isUnlocked}
-                        title={isUnlocked ? 'Get an AI capability suggestion' : 'Complete at least 50% of your profile to unlock AI suggestions'}
-                        className={`h-11 w-11 rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-colors ${
+                        title={isUnlocked ? 'Get a predictive recommendation' : 'Complete at least 50% of your profile to unlock predictive recommendations'}
+                        className={`inline-flex items-center gap-1.5 h-11 rounded-full px-4 text-xs font-bold shadow-sm transition-colors ${
                             isUnlocked
                                 ? 'bg-pod-primary text-pod-primary-foreground hover:bg-pod-primary-hover'
                                 : 'bg-pod-bg-soft text-pod-muted cursor-not-allowed'
                         }`}
                     >
-                        AI
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Predictive Recommendation
                     </button>
                 </div>
             </div>
@@ -177,12 +178,12 @@ export default function ProfileBanner({
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label="AI capability suggestion"
+                        aria-label="Predictive recommendation"
                         className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
                     >
                         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pod-primary">
-                                <Sparkles className="h-3.5 w-3.5" /> AI Suggestion
+                                <Sparkles className="h-3.5 w-3.5" /> Predictive Recommendation
                             </span>
                             <button type="button" onClick={() => setShowSuggestion(false)} aria-label="Close" className="text-pod-muted hover:text-pod-text transition">
                                 <X className="w-4.5 h-4.5" />

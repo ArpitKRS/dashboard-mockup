@@ -661,7 +661,7 @@ export default function DashboardPdfDocument({
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Your Progress</Text>
+                    <Text style={styles.sectionTitle}>Status & Progress</Text>
                     <ProgressSection />
                 </View>
 

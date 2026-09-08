@@ -145,7 +145,7 @@ function ResumeSnapshot({
 const MOCK_GOAL_GENERATION_MS = 900
 
 /**
- * "Profile Capability Reflection" — a left-nav / right-panel layout
+ * "Dynamic Context" — a left-nav / right-panel layout
  * (Current Role, and Future Role & Roadmap once the profile is complete),
  * replacing the old single-scroll Career Path card. Current Role tracks the
  * same two-step completion (resume + Capability Building Form) the rest of
@@ -206,7 +206,7 @@ export default function ProfileCapabilityReflection({
     return (
         <article className="rounded-2xl border border-pod-border bg-white shadow-sm overflow-hidden">
             <div className="px-6 pt-6 pb-5">
-                <h2 className="text-lg font-semibold text-pod-text">Profile Capability Reflection</h2>
+                <h2 className="text-lg font-semibold text-pod-text">Dynamic Context</h2>
                 <p className="text-sm text-pod-muted mt-1">
                     Build your current profile, then map it against where you want to go next.
                 </p>

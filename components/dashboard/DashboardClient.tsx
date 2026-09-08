@@ -19,8 +19,7 @@ import ProfileBanner from './ProfileBanner'
 import CurrentCapabilityCard from './CurrentCapabilityCard'
 import ProfileCapabilityReflection from './ProfileCapabilityReflection'
 import ProgressCountsPanel from './ProgressCountsPanel'
-import TestimonialsSection from './TestimonialsSection'
-import CredentialsUploadSection from './CredentialsUploadSection'
+import AuthenticatedCapabilitySection from './AuthenticatedCapabilitySection'
 import CapabilityBuildingForm from './CapabilityBuildingForm'
 import DashboardPdfDocument from './DashboardPdfDocument'
 
@@ -202,8 +201,7 @@ export default function DashboardClient() {
 
             <ProgressCountsPanel />
 
-            <TestimonialsSection />
-            <CredentialsUploadSection />
+            <AuthenticatedCapabilitySection />
 
             <input
                 ref={resumeFileInputRef}
