@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowRight, Clock3, Trophy } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
+import AccordionPanel from '@/components/ui/AccordionPanel'
 import CapabilityGraphGrid from './CapabilityGraphGrid'
 import CareerRoadmapMap from './CareerRoadmapMap'
 import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
@@ -173,6 +174,7 @@ export default function ProfileCapabilityReflection({
 }: ProfileCapabilityReflectionProps) {
     const isFutureRoleUnlocked = completionPct >= 50
     const [panel, setPanel] = useState<PanelId>('current-role')
+    const [isOpen, setIsOpen] = useState(true)
 
     const [futureGoalInput, setFutureGoalInput] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
@@ -204,10 +206,14 @@ export default function ProfileCapabilityReflection({
     }
 
     return (
-        <article className="rounded-2xl border border-pod-border bg-white shadow-sm overflow-hidden">
-            <div className="px-6 pt-6 pb-5">
-                <h2 className="text-lg font-semibold text-pod-text">Dynamic Context</h2>
-                <p className="text-sm text-pod-muted mt-1">
+        <AccordionPanel
+            title="Dynamic Context"
+            open={isOpen}
+            onToggle={() => setIsOpen(current => !current)}
+            className="overflow-hidden"
+        >
+            <div className="px-6 pt-5 pb-5">
+                <p className="text-sm text-pod-muted">
                     Build your current profile, then map it against where you want to go next.
                 </p>
 
@@ -360,6 +366,6 @@ export default function ProfileCapabilityReflection({
                     )}
                 </div>
             </div>
-        </article>
+        </AccordionPanel>
     )
 }
