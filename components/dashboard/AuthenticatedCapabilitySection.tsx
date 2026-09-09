@@ -1,131 +1,786 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Quote, Trophy, ScrollText, Award, Upload, X, type LucideIcon } from 'lucide-react'
+import {
+    Quote, Trophy, ScrollText, Award, Upload, X, ArrowRight, BadgeCheck, Eye, Download,
+    UserPlus, Send, Plus, Trash2, type LucideIcon,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import UserAvatar from '@/components/ui/UserAvatar'
+import AccordionPanel from '@/components/ui/AccordionPanel'
+import Modal from '@/components/ui/Modal'
 import { MOCK_TESTIMONIALS } from './mockTestimonialsData'
+import { MOCK_PLATFORM_CERTIFICATES, type PlatformCertificate } from './mockPlatformCertificates'
+import { MOCK_POD_USERS, type PodUser } from './mockPodUsers'
+import type { ResumeCertification } from './mockResumeData'
 
-interface CredentialCategory {
-    id: string
-    label: string
-    description: string
-    icon: LucideIcon
+interface AuthenticatedCapabilitySectionProps {
+    /** Resume-parsed achievements — the Achievements card's own end goal is to
+     *  list these transferred in from resume parsing, rather than being yet
+     *  another raw upload dropzone. Null until a resume has been uploaded. */
+    achievements: ResumeCertification[] | null
+    fullName: string
 }
 
-const CATEGORIES: CredentialCategory[] = [
-    { id: 'achievements', label: 'Achievements', description: 'Awards, recognitions, or milestones worth showing off.', icon: Trophy },
-    { id: 'recommendations', label: 'Letters of Recommendation', description: 'A reference letter from a manager, mentor, or colleague.', icon: ScrollText },
-    { id: 'certificates', label: 'Certificates', description: 'Proof of a course you completed on this platform.', icon: Award },
-]
+/** One achievement's uploaded proof — a real File the member picked, kept as
+ *  local state only (mocked like every other upload in this project). */
+interface AchievementProof {
+    file: File
+    url: string
+}
 
-/** One category's dropzone — purely local state, mocked like every other
- *  upload in this project (see DashboardClient's resume-upload input). */
-function UploadSlot({ category }: { category: CredentialCategory }) {
-    const inputRef = useRef<HTMLInputElement>(null)
-    const [files, setFiles] = useState<string[]>([])
-    const Icon = category.icon
+/** One uploaded letter of recommendation. */
+interface RecommendationLetter {
+    id: string
+    name: string
+    fileName: string
+    url: string
+}
 
-    const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const picked = Array.from(e.target.files ?? []).map(f => f.name)
-        e.target.value = ''
-        if (picked.length === 0) return
-        setFiles(prev => Array.from(new Set([...prev, ...picked])))
-    }
+/** An achievement the member types in themselves, rather than one pulled
+ *  from resume parsing — same verify-by-upload flow as a resume achievement
+ *  (see AchievementProof/AchievementRow below), just with no issuer line
+ *  since there's no resume metadata behind it. Underlying logic (e.g.
+ *  matching a typed name against a real credential registry) is a later
+ *  decision — for this mock-up, typing a name and clicking Add is enough to
+ *  create the (not verified) row. */
+interface ManualAchievement {
+    id: string
+    title: string
+    proof?: AchievementProof
+}
 
-    const removeFile = (name: string) => {
-        setFiles(prev => prev.filter(f => f !== name))
-    }
-
+function CredentialCard({
+    icon: Icon,
+    label,
+    description,
+    ctaLabel,
+    onClick,
+}: {
+    icon: LucideIcon
+    label: string
+    description: string
+    ctaLabel: string
+    onClick: () => void
+}) {
     return (
-        <div className="rounded-xl border-2 border-dashed border-pod-border bg-pod-bg-soft p-4 flex flex-col">
+        <button
+            type="button"
+            onClick={onClick}
+            className="rounded-xl border-2 border-dashed border-pod-border bg-pod-bg-soft p-4 flex flex-col items-start text-left transition hover:border-pod-primary-medium hover:bg-white"
+        >
             <div className="flex items-center gap-2 mb-1">
                 <Icon aria-hidden className="h-4 w-4 text-pod-primary" />
-                <p className="text-sm font-semibold text-pod-text">{category.label}</p>
+                <p className="text-sm font-semibold text-pod-text">{label}</p>
             </div>
-            <p className="text-xs text-pod-muted mb-3">{category.description}</p>
+            <p className="text-xs text-pod-muted mb-3">{description}</p>
+            <span className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-pod-primary">
+                {ctaLabel} <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+        </button>
+    )
+}
 
-            <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-pod-border bg-white px-3 py-2 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
-            >
-                <Upload className="h-3.5 w-3.5" />
-                Upload file
-            </button>
-            <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFilesSelected} />
+/** One achievement row — the shared verify-by-upload card used for both
+ *  résumé-pulled achievements (title + issuer, proof keyed by array index)
+ *  and member-typed ones (title only, proof keyed by the achievement's own
+ *  id) — same visual treatment either way: a real proof document earns the
+ *  "Verified" badge, otherwise it stays "(not verified)" with an upload
+ *  affordance. */
+function AchievementRow({
+    title,
+    issuer,
+    proof,
+    onUploadProof,
+    onDelete,
+}: {
+    title: string
+    issuer?: string
+    proof: AchievementProof | undefined
+    onUploadProof: (file: File) => void
+    onDelete: () => void
+}) {
+    const inputRef = useRef<HTMLInputElement>(null)
 
-            {files.length > 0 && (
-                <ul className="mt-3 space-y-1.5">
-                    {files.map(name => (
-                        <li
-                            key={name}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs text-pod-text"
+    return (
+        <div className="rounded-xl border border-pod-border bg-pod-bg-soft p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <p className="text-sm font-semibold text-pod-text">{title}</p>
+                    {issuer && <p className="text-xs text-pod-muted">{issuer}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    {proof ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                            <BadgeCheck className="h-3.5 w-3.5" /> Verified
+                        </span>
+                    ) : (
+                        <span className="text-[11px] font-medium text-pod-muted">(not verified)</span>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        aria-label={`Delete ${title}`}
+                        className="text-pod-muted transition hover:text-red-600"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                {proof ? (
+                    <>
+                        <span className="min-w-0 max-w-[10rem] truncate text-xs text-pod-muted" title={proof.file.name}>
+                            {proof.file.name}
+                        </span>
+                        <a
+                            href={proof.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
                         >
-                            <span className="truncate">{name}</span>
-                            <button
-                                type="button"
-                                onClick={() => removeFile(name)}
-                                aria-label={`Remove ${name}`}
-                                className="shrink-0 text-pod-muted transition hover:text-pod-text"
-                            >
-                                <X className="h-3.5 w-3.5" />
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
+                            <Eye className="h-3.5 w-3.5" /> View
+                        </a>
+                        <a
+                            href={proof.url}
+                            download={proof.file.name}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                        >
+                            <Download className="h-3.5 w-3.5" /> Download
+                        </a>
+                        <button
+                            type="button"
+                            onClick={() => inputRef.current?.click()}
+                            className="shrink-0 text-xs font-semibold text-pod-primary transition hover:text-pod-primary-hover"
+                        >
+                            Update
+                        </button>
+                    </>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-pod-border bg-white px-3 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                    >
+                        <Upload className="h-3.5 w-3.5" /> Upload proof to verify
+                    </button>
+                )}
+                <input
+                    ref={inputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={e => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (file) onUploadProof(file)
+                    }}
+                />
+            </div>
         </div>
     )
 }
 
-/**
- * "Authenticated Capability" — what other people have said about this member,
- * plus the supporting documents (achievements, letters of recommendation,
- * platform course certificates) they attach themselves, as one combined
- * card. Both halves are mocked: testimonials are fixed content (no backend
- * to collect real ones from) and uploads are local-state-only dropzones
- * (see DashboardClient's resume-upload input for the same pattern).
- */
-export default function AuthenticatedCapabilitySection() {
-    return (
-        <article className="rounded-2xl border border-pod-border bg-white shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-pod-text">Authenticated Capability</h2>
-            <p className="text-sm text-pod-muted mt-1">
-                What others have said about working with you, plus the documents that back it up.
-            </p>
+/** Achievements pop-up: lists what resume parsing found (transferred in from
+ *  the Resume area, not typed here) plus whatever the member has typed in
+ *  themselves below — same verify-by-upload flow either way. Proof state
+ *  lives one level up (AuthenticatedCapabilitySection) so it survives this
+ *  modal closing. */
+function AchievementsModal({
+    achievements,
+    proofs,
+    onUploadProof,
+    removedIndices,
+    onDeleteAchievement,
+    manualAchievements,
+    onAddManualAchievement,
+    onUploadManualProof,
+    onDeleteManualAchievement,
+    onClose,
+}: {
+    achievements: ResumeCertification[] | null
+    proofs: Record<number, AchievementProof>
+    onUploadProof: (index: number, file: File) => void
+    removedIndices: Set<number>
+    onDeleteAchievement: (index: number) => void
+    manualAchievements: ManualAchievement[]
+    onAddManualAchievement: (title: string) => void
+    onUploadManualProof: (id: string, file: File) => void
+    onDeleteManualAchievement: (id: string) => void
+    onClose: () => void
+}) {
+    const [newTitle, setNewTitle] = useState('')
+    const visibleResumeCount = achievements?.filter((_, i) => !removedIndices.has(i)).length ?? 0
+    const hasAnyAchievements = visibleResumeCount > 0 || manualAchievements.length > 0
 
-            <div className="mt-6">
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-3">Testimonials</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {MOCK_TESTIMONIALS.map(testimonial => (
-                        <div key={testimonial.name} className="rounded-xl border border-pod-border bg-pod-bg-soft p-4 flex flex-col">
-                            <Quote aria-hidden className="h-4 w-4 text-pod-primary mb-2" />
-                            <p className="text-xs leading-relaxed italic text-pod-text flex-1">
-                                &ldquo;{testimonial.quote}&rdquo;
-                            </p>
-                            <div className="flex items-center gap-2.5 mt-4 pt-3 border-t border-pod-border">
-                                <UserAvatar name={testimonial.name} size={32} />
-                                <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-pod-text truncate">{testimonial.name}</p>
-                                    <p className="text-[11px] text-pod-muted truncate">{testimonial.relationship}</p>
+    const handleAdd = () => {
+        const trimmed = newTitle.trim()
+        if (!trimmed) return
+        onAddManualAchievement(trimmed)
+        setNewTitle('')
+    }
+
+    return (
+        <Modal
+            title="Your Achievements"
+            subtitle="Pulled in automatically from your resume — or add your own below."
+            icon={<Trophy className="w-4 h-4 text-pod-primary" />}
+            onClose={onClose}
+        >
+            {!hasAnyAchievements ? (
+                <p className="text-sm text-pod-muted">No achievements yet — upload a resume to bring some in, or add one below.</p>
+            ) : (
+                <div className="space-y-3">
+                    {achievements?.map((achievement, i) => (
+                        removedIndices.has(i) ? null : (
+                            <AchievementRow
+                                key={`resume-${i}`}
+                                title={achievement.title}
+                                issuer={achievement.issuer}
+                                proof={proofs[i]}
+                                onUploadProof={file => onUploadProof(i, file)}
+                                onDelete={() => onDeleteAchievement(i)}
+                            />
+                        )
+                    ))}
+                    {manualAchievements.map(achievement => (
+                        <AchievementRow
+                            key={achievement.id}
+                            title={achievement.title}
+                            proof={achievement.proof}
+                            onUploadProof={file => onUploadManualProof(achievement.id, file)}
+                            onDelete={() => onDeleteManualAchievement(achievement.id)}
+                        />
+                    ))}
+                </div>
+            )}
+
+            <div className="mt-5 border-t border-pod-border pt-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Add a new achievement</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        value={newTitle}
+                        onChange={e => setNewTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+                        placeholder="e.g. Google Data Analytics Certificate"
+                        className="min-w-0 flex-1 rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleAdd}
+                        disabled={!newTitle.trim()}
+                        className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-pod-primary px-4 py-2.5 text-sm font-semibold text-pod-primary-foreground transition hover:bg-pod-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Plus className="h-4 w-4" /> Add
+                    </button>
+                </div>
+                <p className="mt-1.5 text-xs text-pod-muted">It'll show as (not verified) until you upload proof.</p>
+            </div>
+        </Modal>
+    )
+}
+
+/** Certificates pop-up: read-only list of platform course completions — the
+ *  "Download" button generates a small text stand-in on the fly (this
+ *  mock-up has no real PDF certificate to serve), same mocked-but-functional
+ *  spirit as every other download/upload affordance in this project. */
+function CertificatesModal({
+    certificates,
+    fullName,
+    onDelete,
+    onClose,
+}: {
+    certificates: PlatformCertificate[]
+    fullName: string
+    onDelete: (id: string) => void
+    onClose: () => void
+}) {
+    const handleDownload = (cert: PlatformCertificate) => {
+        const completed = new Date(cert.completedDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+        const text = `Certificate of Completion\n\n${fullName} has successfully completed "${cert.courseName}" on this platform.\n\nCompleted: ${completed}\nCredential ID: ${cert.credentialId}`
+        const blob = new Blob([text], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${cert.courseName.replace(/\s+/g, '-').toLowerCase()}-certificate.txt`
+        anchor.click()
+        URL.revokeObjectURL(url)
+    }
+
+    return (
+        <Modal
+            title="Your Certificates"
+            subtitle="Earned by completing courses on this platform."
+            icon={<Award className="w-4 h-4 text-pod-primary" />}
+            onClose={onClose}
+        >
+            {certificates.length === 0 ? (
+                <p className="text-sm text-pod-muted">Complete a course on this platform to earn your first certificate.</p>
+            ) : (
+                <div className="space-y-3">
+                    {certificates.map(cert => (
+                        <div key={cert.id} className="flex items-center justify-between gap-3 rounded-xl border border-pod-border bg-pod-bg-soft p-4">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-amber-300 to-amber-500 ring-4 ring-amber-100">
+                                    <Award aria-hidden className="h-5 w-5 text-white" />
                                 </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-pod-text truncate">{cert.courseName}</p>
+                                    <p className="text-xs text-pod-muted">
+                                        Completed {new Date(cert.completedDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} · {cert.credentialId}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownload(cert)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-pod-border bg-white px-3 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                                >
+                                    <Download className="h-3.5 w-3.5" /> Download
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(cert.id)}
+                                    aria-label={`Delete ${cert.courseName}`}
+                                    className="text-pod-muted transition hover:text-red-600"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
                             </div>
                         </div>
                     ))}
                 </div>
+            )}
+        </Modal>
+    )
+}
+
+/** Letters of Recommendation pop-up: view/download what's already uploaded,
+ *  plus a small add-new form (name + file) — the one credential category
+ *  that's genuinely user-supplied, so it keeps the upload affordance the
+ *  others gave up in favor of read-only/verify views. */
+function LettersModal({
+    letters,
+    onAdd,
+    onDelete,
+    onClose,
+}: {
+    letters: RecommendationLetter[]
+    onAdd: (input: { name: string; file: File }) => void
+    onDelete: (id: string) => void
+    onClose: () => void
+}) {
+    const [name, setName] = useState('')
+    const [pendingFile, setPendingFile] = useState<File | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const canAdd = name.trim().length > 0 && pendingFile != null
+
+    const handleAdd = () => {
+        if (!canAdd || !pendingFile) return
+        onAdd({ name: name.trim(), file: pendingFile })
+        setName('')
+        setPendingFile(null)
+    }
+
+    return (
+        <Modal
+            title="Letters of Recommendation"
+            subtitle="Reference letters from a manager, mentor, or colleague."
+            icon={<ScrollText className="w-4 h-4 text-pod-primary" />}
+            onClose={onClose}
+        >
+            <div className="space-y-3">
+                {letters.length === 0 ? (
+                    <p className="text-sm text-pod-muted">No letters uploaded yet.</p>
+                ) : (
+                    letters.map(letter => (
+                        <div key={letter.id} className="flex items-center justify-between gap-3 rounded-xl border border-pod-border bg-pod-bg-soft p-3.5">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-pod-primary">
+                                    <ScrollText className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-pod-text truncate">{letter.name}</p>
+                                    <p className="text-xs text-pod-muted truncate">{letter.fileName}</p>
+                                </div>
+                            </div>
+                            <div className="shrink-0 flex items-center gap-2">
+                                <a
+                                    href={letter.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                                >
+                                    <Eye className="h-3.5 w-3.5" /> View
+                                </a>
+                                <a
+                                    href={letter.url}
+                                    download={letter.fileName}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                                >
+                                    <Download className="h-3.5 w-3.5" /> Download
+                                </a>
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(letter.id)}
+                                    aria-label={`Delete ${letter.name}`}
+                                    className="text-pod-muted transition hover:text-red-600"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-pod-border">
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Achievements &amp; Credentials</p>
-                <p className="text-sm text-pod-muted mb-3">
-                    Add supporting documents to your profile — achievements, letters of recommendation, and certificates from courses you completed on this platform.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {CATEGORIES.map(category => (
-                        <UploadSlot key={category.id} category={category} />
-                    ))}
+            <div className="mt-5 border-t border-pod-border pt-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Add a new letter</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="e.g. Letter from my manager"
+                        className="min-w-0 flex-1 rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-pod-border bg-white px-3 py-2.5 text-sm font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                    >
+                        <Upload className="h-4 w-4" />
+                        <span className="max-w-[8rem] truncate">{pendingFile ? pendingFile.name : 'Choose file'}</span>
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={e => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''
+                            if (file) setPendingFile(file)
+                        }}
+                    />
+                    <button
+                        type="button"
+                        onClick={handleAdd}
+                        disabled={!canAdd}
+                        className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-pod-primary px-4 py-2.5 text-sm font-semibold text-pod-primary-foreground transition hover:bg-pod-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Plus className="h-4 w-4" /> Add
+                    </button>
                 </div>
             </div>
-        </article>
+        </Modal>
+    )
+}
+
+/** Invite Peers pop-up: search + multi-select over the pod's members, then a
+ *  mocked "send". Real behaviour (per product intent) would notify each
+ *  invited person, who fills in a testimony from their notifications that
+ *  then lands back here automatically — there's no notification system in
+ *  this mock-up, so sending just closes the dialog with a toast. */
+function InvitePeersModal({ onClose }: { onClose: () => void }) {
+    const [query, setQuery] = useState('')
+    const [selected, setSelected] = useState<PodUser[]>([])
+    const [sending, setSending] = useState(false)
+
+    const filtered = MOCK_POD_USERS.filter(user =>
+        !selected.some(s => s.id === user.id) &&
+        (user.name.toLowerCase().includes(query.toLowerCase()) || user.role.toLowerCase().includes(query.toLowerCase()))
+    )
+
+    const handleSend = () => {
+        if (selected.length === 0 || sending) return
+        setSending(true)
+        toast.success(`Invite sent to ${selected.length} ${selected.length === 1 ? 'person' : 'people'}.`)
+        setTimeout(onClose, 600)
+    }
+
+    return (
+        <Modal
+            title="Invite Peers for a Testimony"
+            subtitle="They'll get a notification to write a few words about working with you."
+            icon={<UserPlus className="w-4 h-4 text-pod-primary" />}
+            onClose={onClose}
+            footer={
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg border border-pod-border px-4 py-2 text-sm text-pod-text transition hover:bg-white"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSend}
+                        disabled={selected.length === 0 || sending}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-pod-primary px-4 py-2 text-sm font-semibold text-pod-primary-foreground transition hover:bg-pod-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Send className="h-3.5 w-3.5" /> Send invite{selected.length > 1 ? 's' : ''}
+                    </button>
+                </>
+            }
+        >
+            {selected.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                    {selected.map(user => (
+                        <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-pod-primary-light px-2.5 py-1 text-xs font-semibold text-pod-primary">
+                            {user.name}
+                            <button type="button" onClick={() => setSelected(prev => prev.filter(u => u.id !== user.id))} aria-label={`Remove ${user.name}`}>
+                                <X className="h-3 w-3" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search people in your pod…"
+                className="mb-3 w-full rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+            />
+
+            <div className="max-h-56 space-y-1 overflow-y-auto">
+                {filtered.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-pod-muted">No matching people found.</p>
+                ) : (
+                    filtered.map(user => (
+                        <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => setSelected(prev => [...prev, user])}
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-pod-bg-soft"
+                        >
+                            <UserAvatar name={user.name} size={32} />
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-pod-text truncate">{user.name}</p>
+                                <p className="text-xs text-pod-muted truncate">{user.role}</p>
+                            </div>
+                        </button>
+                    ))
+                )}
+            </div>
+
+            <p className="mt-4 text-[11px] text-pod-muted">
+                Mocked for this prototype — in the real app, each person gets a notification, opens it, fills in a short testimony, and it appears here automatically once submitted.
+            </p>
+        </Modal>
+    )
+}
+
+/** Seeds one already-uploaded letter so the "fully built-out" mock persona
+ *  has something to look at immediately, same as every other section on
+ *  this page — its object URL points to a small generated text stand-in
+ *  (there's no real uploaded file for a seeded row), so View/Download still
+ *  work like they would for a genuinely uploaded one. */
+/** Seeds the first achievement as already verified, so the "fully built-out"
+ *  mock persona shows every state at a glance the moment the pop-up opens:
+ *  one Verified (with a real, viewable/downloadable proof file), and the
+ *  other two still "(not verified)" with the upload-to-verify affordance —
+ *  same generated-Blob-as-stand-in-file approach as seedLetters below. */
+function seedAchievementProofs(): Record<number, AchievementProof> {
+    const file = new File(
+        ['Mock verification document for Jordan Ellis — AWS Certified Solutions Architect – Associate.'],
+        'aws-certified-solutions-architect-proof.pdf',
+        { type: 'application/pdf' }
+    )
+    return { 0: { file, url: URL.createObjectURL(file) } }
+}
+
+function seedLetters(): RecommendationLetter[] {
+    const blob = new Blob(
+        ['This is a mock letter of recommendation for Jordan Ellis, provided as sample content for this dashboard prototype.'],
+        { type: 'text/plain' }
+    )
+    return [{ id: 'seed-1', name: 'Letter from Priya Nair (Team Lead)', fileName: 'priya-nair-recommendation.txt', url: URL.createObjectURL(blob) }]
+}
+
+/**
+ * "Authenticated Capability" — what other people have said about this member
+ * (Testimonials, plus an "Invite peers" flow to collect more), and the
+ * supporting documents that back their profile up: Achievements (transferred
+ * in from resume parsing, verified by uploading proof), Certificates (earned
+ * on this platform), and Letters of Recommendation (uploaded directly here).
+ * Each credential category now opens its own pop-up rather than being an
+ * inline dropzone, since Achievements/Certificates are no longer raw
+ * uploads — see CredentialCard below.
+ */
+export default function AuthenticatedCapabilitySection({ achievements, fullName }: AuthenticatedCapabilitySectionProps) {
+    const [open, setOpen] = useState(false)
+
+    const [showInvite, setShowInvite] = useState(false)
+    const [showAchievements, setShowAchievements] = useState(false)
+    const [showCertificates, setShowCertificates] = useState(false)
+    const [showLetters, setShowLetters] = useState(false)
+
+    const [achievementProofs, setAchievementProofs] = useState<Record<number, AchievementProof>>(seedAchievementProofs)
+    const [removedAchievementIndices, setRemovedAchievementIndices] = useState<Set<number>>(new Set())
+    const [manualAchievements, setManualAchievements] = useState<ManualAchievement[]>([])
+    const [letters, setLetters] = useState<RecommendationLetter[]>(seedLetters)
+    const [certificates, setCertificates] = useState<PlatformCertificate[]>(MOCK_PLATFORM_CERTIFICATES)
+
+    const handleUploadProof = (index: number, file: File) => {
+        setAchievementProofs(prev => {
+            const previous = prev[index]
+            if (previous) URL.revokeObjectURL(previous.url)
+            return { ...prev, [index]: { file, url: URL.createObjectURL(file) } }
+        })
+    }
+
+    // Resume-parsed achievements aren't owned by this component's state (they
+    // come in as a prop from the resume-parse result), so "deleting" one just
+    // hides its index here rather than mutating the source array.
+    const handleDeleteAchievement = (index: number) => {
+        setRemovedAchievementIndices(prev => new Set(prev).add(index))
+        setAchievementProofs(prev => {
+            const previous = prev[index]
+            if (!previous) return prev
+            URL.revokeObjectURL(previous.url)
+            const next = { ...prev }
+            delete next[index]
+            return next
+        })
+    }
+
+    const handleAddManualAchievement = (title: string) => {
+        setManualAchievements(prev => [...prev, { id: `manual-${Date.now()}`, title }])
+    }
+
+    const handleUploadManualProof = (id: string, file: File) => {
+        setManualAchievements(prev => prev.map(achievement => {
+            if (achievement.id !== id) return achievement
+            if (achievement.proof) URL.revokeObjectURL(achievement.proof.url)
+            return { ...achievement, proof: { file, url: URL.createObjectURL(file) } }
+        }))
+    }
+
+    const handleDeleteManualAchievement = (id: string) => {
+        setManualAchievements(prev => {
+            const target = prev.find(achievement => achievement.id === id)
+            if (target?.proof) URL.revokeObjectURL(target.proof.url)
+            return prev.filter(achievement => achievement.id !== id)
+        })
+    }
+
+    const handleAddLetter = ({ name, file }: { name: string; file: File }) => {
+        setLetters(prev => [...prev, { id: `letter-${Date.now()}`, name, fileName: file.name, url: URL.createObjectURL(file) }])
+    }
+
+    const handleDeleteLetter = (id: string) => {
+        setLetters(prev => {
+            const target = prev.find(letter => letter.id === id)
+            if (target) URL.revokeObjectURL(target.url)
+            return prev.filter(letter => letter.id !== id)
+        })
+    }
+
+    const handleDeleteCertificate = (id: string) => {
+        setCertificates(prev => prev.filter(cert => cert.id !== id))
+    }
+
+    return (
+        <>
+            <AccordionPanel
+                title="Authenticated Capability"
+                open={open}
+                onToggle={() => setOpen(o => !o)}
+                className="overflow-hidden"
+            >
+                <div className="px-6 pt-5 pb-6">
+                    <p className="text-sm text-pod-muted">
+                        What others have said about working with you, plus the documents that back it up.
+                    </p>
+
+                    <div className="mt-6">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">Testimonials</p>
+                            <button
+                                type="button"
+                                onClick={() => setShowInvite(true)}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-pod-border bg-white px-3 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
+                            >
+                                <UserPlus className="h-3.5 w-3.5" /> Invite peers to write a testimony
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {MOCK_TESTIMONIALS.map(testimonial => (
+                                <div key={testimonial.name} className="rounded-xl border border-pod-border bg-pod-bg-soft p-4 flex flex-col">
+                                    <Quote aria-hidden className="h-4 w-4 text-pod-primary mb-2" />
+                                    <p className="text-xs leading-relaxed italic text-pod-text flex-1">
+                                        &ldquo;{testimonial.quote}&rdquo;
+                                    </p>
+                                    <div className="flex items-center gap-2.5 mt-4 pt-3 border-t border-pod-border">
+                                        <UserAvatar name={testimonial.name} size={32} />
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-pod-text truncate">{testimonial.name}</p>
+                                            <p className="text-[11px] text-pod-muted truncate">{testimonial.relationship}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mt-6 pt-6 border-t border-pod-border">
+                        <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Achievements &amp; Credentials</p>
+                        <p className="text-sm text-pod-muted mb-3">
+                            Achievements come in from your resume; certificates and letters of recommendation live here too.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <CredentialCard
+                                icon={Trophy}
+                                label="Achievements"
+                                description="Awards, recognitions, or milestones worth showing off."
+                                ctaLabel="Click to see your achievements"
+                                onClick={() => setShowAchievements(true)}
+                            />
+                            <CredentialCard
+                                icon={ScrollText}
+                                label="Letters of Recommendation"
+                                description="A reference letter from a manager, mentor, or colleague."
+                                ctaLabel="View & upload letters"
+                                onClick={() => setShowLetters(true)}
+                            />
+                            <CredentialCard
+                                icon={Award}
+                                label="Certificates"
+                                description="Proof of a course you completed on this platform."
+                                ctaLabel="View your certificates"
+                                onClick={() => setShowCertificates(true)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </AccordionPanel>
+
+            {showInvite && <InvitePeersModal onClose={() => setShowInvite(false)} />}
+            {showAchievements && (
+                <AchievementsModal
+                    achievements={achievements}
+                    proofs={achievementProofs}
+                    onUploadProof={handleUploadProof}
+                    removedIndices={removedAchievementIndices}
+                    onDeleteAchievement={handleDeleteAchievement}
+                    manualAchievements={manualAchievements}
+                    onAddManualAchievement={handleAddManualAchievement}
+                    onUploadManualProof={handleUploadManualProof}
+                    onDeleteManualAchievement={handleDeleteManualAchievement}
+                    onClose={() => setShowAchievements(false)}
+                />
+            )}
+            {showCertificates && (
+                <CertificatesModal certificates={certificates} fullName={fullName} onDelete={handleDeleteCertificate} onClose={() => setShowCertificates(false)} />
+            )}
+            {showLetters && (
+                <LettersModal letters={letters} onAdd={handleAddLetter} onDelete={handleDeleteLetter} onClose={() => setShowLetters(false)} />
+            )}
+        </>
     )
 }

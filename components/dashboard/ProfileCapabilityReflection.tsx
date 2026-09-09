@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowRight, Clock3, Trophy } from 'lucide-react'
+import { ArrowRight, Clock3 } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import AccordionPanel from '@/components/ui/AccordionPanel'
 import CapabilityGraphGrid from './CapabilityGraphGrid'
 import CareerRoadmapMap from './CareerRoadmapMap'
 import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
 import type { CapabilityAnswers, CapabilityAnswer } from '@/lib/capabilityForm'
-import type { ResumeRoleSummary, ResumeCertification } from './mockResumeData'
+import type { ResumeRoleSummary } from './mockResumeData'
 
 type PanelId = 'current-role' | 'future-role'
 
@@ -32,7 +32,6 @@ interface ProfileCapabilityReflectionProps {
     skills: string[]
     interests: string[]
     resumeRoles: ResumeRoleSummary[] | null
-    resumeCertifications: ResumeCertification[] | null
     /** Lifted to DashboardClient (rather than owned here) so the PDF export —
      *  which needs the same role/skill-gap data — can derive it too, without
      *  threading a callback back up just to hand the computed value over. */
@@ -52,6 +51,45 @@ interface ProfileCapabilityReflectionProps {
     onAnswerChange: (questionId: string, answer: CapabilityAnswer) => void
 }
 
+/** Small header-sized completion ring — replaces the old linear "Profile
+ *  completion" bar, sitting in the accordion title row itself so the status
+ *  reads at a glance even while collapsed. Grey (not the pod accent color)
+ *  at exactly 0%, since a colored ring at zero progress reads as "some
+ *  progress", not "none yet". */
+function CompletionRing({ percent, size = 34 }: { percent: number; size?: number }) {
+    const strokeWidth = 3
+    const radius = (size - strokeWidth) / 2
+    const circumference = 2 * Math.PI * radius
+    const clamped = Math.max(0, Math.min(100, percent))
+    const offset = circumference - (clamped / 100) * circumference
+    const isZero = clamped === 0
+    const trackColor = isZero ? '#E5E7EB' : 'var(--color-pod-primary-light)'
+    const progressColor = isZero ? '#9CA3AF' : 'var(--color-pod-primary)'
+
+    return (
+        <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden="true">
+                <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
+                <circle
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke={progressColor}
+                    strokeWidth={strokeWidth}
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    className="transition-[stroke-dashoffset] duration-500 ease-out"
+                />
+            </svg>
+            <span className={`absolute text-[9px] font-bold tabular-nums ${isZero ? 'text-gray-500' : 'text-pod-primary'}`}>
+                {clamped}%
+            </span>
+        </span>
+    )
+}
+
 function TagChip({ label }: { label: string }) {
     return (
         <span className="inline-flex items-center rounded-full border border-pod-border bg-pod-bg-soft px-3 py-1 text-xs font-medium text-pod-text">
@@ -66,17 +104,14 @@ function ResumeSnapshot({
     roles,
     skills,
     interests,
-    certifications,
 }: {
     roles: ResumeRoleSummary[] | null
     skills: string[]
     interests: string[]
-    certifications: ResumeCertification[] | null
 }) {
     const hasRoles = Boolean(roles && roles.length > 0)
     const hasTags = skills.length > 0 || interests.length > 0
-    const hasCertifications = Boolean(certifications && certifications.length > 0)
-    if (!hasRoles && !hasTags && !hasCertifications) return null
+    if (!hasRoles && !hasTags) return null
 
     return (
         <div className="space-y-5">
@@ -120,23 +155,6 @@ function ResumeSnapshot({
                     )}
                 </div>
             )}
-
-            {hasCertifications && (
-                <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Achievements</p>
-                    <div className="flex flex-wrap gap-4">
-                        {certifications!.map((cert, i) => (
-                            <div key={i} className="flex w-24 flex-col items-center text-center" title={`${cert.title} — ${cert.issuer}`}>
-                                <div className="h-14 w-14 shrink-0 rounded-full bg-gradient-to-b from-amber-300 to-amber-500 ring-4 ring-amber-100 flex items-center justify-center shadow-sm">
-                                    <Trophy aria-hidden className="h-6 w-6 text-white" />
-                                </div>
-                                <p className="mt-2 text-[11px] font-semibold text-pod-text leading-snug line-clamp-2">{cert.title}</p>
-                                <p className="text-[10px] text-pod-muted truncate w-full">{cert.issuer}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
@@ -146,7 +164,7 @@ function ResumeSnapshot({
 const MOCK_GOAL_GENERATION_MS = 900
 
 /**
- * "Dynamic Context" — a left-nav / right-panel layout
+ * "Personal Career Reflection" — a left-nav / right-panel layout
  * (Current Role, and Future Role & Roadmap once the profile is complete),
  * replacing the old single-scroll Career Path card. Current Role tracks the
  * same two-step completion (resume + Capability Building Form) the rest of
@@ -161,7 +179,6 @@ export default function ProfileCapabilityReflection({
     skills,
     interests,
     resumeRoles,
-    resumeCertifications,
     submittedGoal,
     onGoalSubmit,
     personalVisionStatement,
@@ -207,7 +224,12 @@ export default function ProfileCapabilityReflection({
 
     return (
         <AccordionPanel
-            title="Dynamic Context"
+            title={
+                <span className="inline-flex items-center gap-2.5">
+                    <CompletionRing percent={completionPct} />
+                    Personal Career Reflection
+                </span>
+            }
             open={isOpen}
             onToggle={() => setIsOpen(current => !current)}
             className="overflow-hidden"
@@ -216,19 +238,6 @@ export default function ProfileCapabilityReflection({
                 <p className="text-sm text-pod-muted">
                     Build your current profile, then map it against where you want to go next.
                 </p>
-
-                <div className="mt-5">
-                    <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-semibold text-pod-text">Profile completion</span>
-                        <span className="text-sm font-bold text-pod-primary">{completionPct}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-pod-primary/10 overflow-hidden">
-                        <div
-                            className="h-full rounded-full bg-pod-primary transition-all duration-500"
-                            style={{ width: `${completionPct}%` }}
-                        />
-                    </div>
-                </div>
             </div>
 
             <div className="flex flex-col md:flex-row border-t border-pod-border">
@@ -264,7 +273,6 @@ export default function ProfileCapabilityReflection({
                                 roles={resumeRoles}
                                 skills={skills}
                                 interests={interests}
-                                certifications={resumeCertifications}
                             />
 
                             {capabilityCompleted && (
@@ -276,7 +284,7 @@ export default function ProfileCapabilityReflection({
                             <div>
                                 <h3 className="text-base font-semibold text-pod-text">Where Do You See Yourself in 5-10 Years?</h3>
                                 <p className="mt-1 text-sm text-pod-muted">Pick the archetype that resonates with your vision.</p>
-                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                                     {FUTURE_ARCHETYPES.map(archetype => {
                                         const selected = futureVisionArchetype === archetype.id
                                         return (
@@ -284,15 +292,17 @@ export default function ProfileCapabilityReflection({
                                                 key={archetype.id}
                                                 type="button"
                                                 onClick={() => onFutureVisionArchetypeSelect(archetype.id)}
-                                                className={`text-left rounded-xl border p-4 transition-colors ${
+                                                className={`text-left rounded-xl border p-2.5 transition-colors ${
                                                     selected
                                                         ? 'border-pod-primary bg-pod-primary-light'
                                                         : 'border-pod-border bg-pod-bg-soft hover:border-pod-primary-medium'
                                                 }`}
                                             >
-                                                <span className="text-2xl">{archetype.emoji}</span>
-                                                <p className="mt-2 text-sm font-semibold text-pod-text">{archetype.title}</p>
-                                                <p className="mt-1 text-xs text-pod-muted leading-relaxed">{archetype.description}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-base leading-none">{archetype.emoji}</span>
+                                                    <p className="text-sm font-semibold text-pod-text">{archetype.title}</p>
+                                                </div>
+                                                <p className="mt-1 text-xs text-pod-muted leading-snug">{archetype.description}</p>
                                             </button>
                                         )
                                     })}

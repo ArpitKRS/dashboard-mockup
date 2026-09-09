@@ -25,7 +25,12 @@ const ROLE_PROFILES: { match: string[]; roleTitle: string; requiredSkills: strin
     {
         match: ['senior software engineer', 'senior engineer', 'senior developer'],
         roleTitle: 'Senior Software Engineer',
-        requiredSkills: ['System Design', 'Code Review', 'Mentoring', 'TypeScript', 'Cloud Architecture', 'CI/CD'],
+        // A mix of hard and soft skills — Stakeholder Management/Conflict
+        // Resolution deliberately named differently from the
+        // requiredCapabilities categories below (Communication, Leadership)
+        // so the Roadmap's skill checkpoints and capability checkpoints
+        // never show the same label twice.
+        requiredSkills: ['System Design', 'Code Review', 'Mentoring', 'TypeScript', 'Cloud Architecture', 'CI/CD', 'Stakeholder Management', 'Conflict Resolution'],
         requiredCapabilities: [
             { category: 'Technical Confidence', targetLevel: 5 },
             { category: 'Leadership', targetLevel: 4 },
@@ -251,4 +256,54 @@ export function computeOverallMatch(skillGap: SkillGap, capabilityGap: Capabilit
     if (total === 0) return 0
     const matched = skillGap.matched.length + capabilityGap.matched.length
     return Math.round((matched / total) * 100)
+}
+
+/** Two other roles worth naming next to whichever one is currently typed —
+ *  a fixed mock lookup (same spirit as ROLE_PROFILES' keyword table), not a
+ *  real "nearest role" search. Every value here is itself a key into
+ *  ROLE_PROFILES via getRoleSkillProfile, so an adjacent role is scored with
+ *  the exact same method as the primary goal. */
+const ADJACENT_ROLE_MAP: Record<string, [string, string]> = {
+    'Senior Software Engineer': ['Engineering Manager', 'Product Manager'],
+    'Engineering Manager': ['Senior Software Engineer', 'Product Manager'],
+    'Product Manager': ['Product Designer', 'Engineering Manager'],
+    'Data Scientist': ['Software Engineer', 'Product Manager'],
+    'Product Designer': ['Product Manager', 'Data Scientist'],
+    'Software Engineer': ['Senior Software Engineer', 'Data Scientist'],
+}
+const DEFAULT_ADJACENT_ROLES: [string, string] = ['Product Manager', 'Software Engineer']
+
+export interface AdjacentRoleMatch {
+    roleTitle: string
+    /** Same "matched / total" percentage computeOverallMatch reports for the
+     *  primary goal — directly comparable to it. */
+    percent: number
+    /** Skills the member's resume already covers for this role. */
+    carriedSkills: string[]
+    /** Skills this role expects that the resume doesn't show yet. */
+    neededSkills: string[]
+}
+
+/** Scores up to 2 roles adjacent to the member's main typed goal, using the
+ *  same currentSkills/answers the Roadmap scores the primary goal with —
+ *  role-only (no archetype merge), since an adjacent path is a different
+ *  destination, not a variation on the same 5-10-year vision. */
+export function getAdjacentRoleMatches(
+    mainRoleTitle: string,
+    currentSkills: string[],
+    answers: CapabilityAnswers
+): AdjacentRoleMatch[] {
+    const candidates = (ADJACENT_ROLE_MAP[mainRoleTitle] ?? DEFAULT_ADJACENT_ROLES).filter(title => title !== mainRoleTitle)
+
+    return candidates.slice(0, 2).map(title => {
+        const profile = getRoleSkillProfile(title)
+        const skillGap = computeSkillGap(currentSkills, profile.requiredSkills)
+        const capabilityGap = computeCapabilityGap(answers, profile.requiredCapabilities)
+        return {
+            roleTitle: profile.roleTitle,
+            percent: computeOverallMatch(skillGap, capabilityGap),
+            carriedSkills: skillGap.matched,
+            neededSkills: skillGap.gaps,
+        }
+    })
 }

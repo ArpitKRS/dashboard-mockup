@@ -10,8 +10,10 @@ import { ChevronDown, Clock3 } from "lucide-react";
 
 export interface AccordionPanelProps {
     id?: string
-    /** Section name shown on the header row. */
-    title: string
+    /** Section name shown on the header row — usually plain text, but a
+     *  ReactNode lets a caller prefix it with something like a small status
+     *  indicator (e.g. ProfileCapabilityReflection's completion ring). */
+    title: React.ReactNode
     /** Whether the body is currently shown. Controlled by the caller. */
     open: boolean
     onToggle: () => void

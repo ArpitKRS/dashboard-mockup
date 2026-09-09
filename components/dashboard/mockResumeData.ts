@@ -13,7 +13,21 @@ export interface ResumeRoleSummary {
  * Stands in for a real ai/resume-parse response on the Dashboard. Same data
  * regardless of which file is picked — see DashboardClient's file input.
  */
-export const MOCK_RESUME_SKILLS = ['React', 'TypeScript', 'Node.js', 'SQL', 'Project Management']
+// Deliberately excludes System Design, Cloud Architecture, and CI/CD — those
+// stay unmatched on purpose, since ProgressCountsPanel's Learning Paths
+// bullets explicitly call them out as named roadmap gaps the member hasn't
+// closed yet. Every other entry is chosen to genuinely overlap with the
+// futureRole.ts ROLE_PROFILES for the main goal (Senior Software Engineer +
+// The Expert archetype) and this member's two adjacent paths (Engineering
+// Manager, Product Manager) — "Stakeholder Management"/"Data Analysis" in
+// particular echo the "working closely with design and product teams"
+// experience already in MOCK_RESUME_ROLES below.
+export const MOCK_RESUME_SKILLS = [
+    'React', 'TypeScript', 'Node.js', 'SQL', 'Project Management',
+    'Code Review', 'Mentoring', 'Deep Technical Mastery', 'Best Practices', 'Documentation',
+    'Technical Strategy', 'Hiring',
+    'Stakeholder Management', 'Data Analysis',
+]
 export const MOCK_RESUME_INTERESTS = ['Product Design', 'Data Analysis']
 
 export const MOCK_RESUME_SUMMARY =

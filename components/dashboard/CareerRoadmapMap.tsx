@@ -1,6 +1,7 @@
 'use client'
 
-import { Check, Lock, Flag, Target } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Lock, Flag, Target, ChevronDown } from 'lucide-react'
 import { computeOverallMatch, type SkillGap, type CapabilityGap } from '@/lib/futureRole'
 
 interface CareerRoadmapMapProps {
@@ -20,7 +21,14 @@ const COLS = 4
 const COL_W = 168
 const ROW_H = 128
 const NODE_R = 26
-const PAD = 56
+// A node's label is centered under it but spans a full column width (see the
+// label foreignObject below: `x - COL_W / 2 + 8`) — for the leftmost column
+// that box starts at `PAD - COL_W / 2 + 8`, which goes negative (clipped by
+// the SVG's viewBox) unless PAD is at least COL_W / 2 - 8. The previous
+// PAD (56) fell short by 20px, clipping the first letter of any long
+// left-column label (e.g. "Deep Technical Mastery" → ")eep Technical
+// Mastery").
+const PAD = 84
 
 /** Snake layout: left-to-right on even rows, right-to-left on odd rows —
  *  reads like a game world map, not a plain grid. */
@@ -63,6 +71,7 @@ function ScoreRing({ percent }: { percent: number }) {
  * rather than a static comparison table.
  */
 export default function CareerRoadmapMap({ roleTitle, skillGap, capabilityGap }: CareerRoadmapMapProps) {
+    const [open, setOpen] = useState(false)
     const overallMatch = computeOverallMatch(skillGap, capabilityGap)
 
     const matchedCheckpoints: Checkpoint[] = [
@@ -88,9 +97,14 @@ export default function CareerRoadmapMap({ roleTitle, skillGap, capabilityGap }:
 
     return (
         <div className="rounded-2xl border border-pod-border bg-pod-bg-soft p-6">
-            <div className="flex flex-wrap items-center gap-5 mb-2">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-expanded={open}
+                className="flex w-full flex-wrap items-center gap-5 mb-2 text-left"
+            >
                 <ScoreRing percent={overallMatch} />
-                <div>
+                <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Path to</p>
                     <div className="flex items-center gap-2">
                         <Target className="h-5 w-5 text-pod-primary shrink-0" />
@@ -100,9 +114,10 @@ export default function CareerRoadmapMap({ roleTitle, skillGap, capabilityGap }:
                         {matchedCheckpoints.length} of {checkpoints.length} checkpoints cleared.
                     </p>
                 </div>
-            </div>
+                <ChevronDown aria-hidden className={`h-5 w-5 shrink-0 text-pod-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+            </button>
 
-            {checkpoints.length === 0 ? (
+            {open && (checkpoints.length === 0 ? (
                 <p className="text-xs text-pod-muted">Complete the Capability Questionnaire to see this mapped out too.</p>
             ) : (
                 <div className="overflow-x-auto custom-scrollbar -mx-2 px-2">
@@ -146,15 +161,19 @@ export default function CareerRoadmapMap({ roleTitle, skillGap, capabilityGap }:
                         })}
 
                         <g>
+                            {/* The end goal always reads as distinct from a plain
+                                locked checkpoint — a light primary-tinted ring
+                                while still in progress, flipping to solid gold
+                                once every checkpoint is cleared. */}
                             <circle
                                 cx={flagPosition.x} cy={flagPosition.y} r={NODE_R + 4}
-                                fill={allCleared ? '#F5B720' : '#FFFFFF'}
-                                stroke={allCleared ? '#F5B720' : 'var(--color-pod-border)'}
+                                fill={allCleared ? '#F5B720' : 'var(--color-pod-primary-light)'}
+                                stroke={allCleared ? '#F5B720' : 'var(--color-pod-primary)'}
                                 strokeWidth={3}
                             />
                             <foreignObject x={flagPosition.x - 13} y={flagPosition.y - 13} width={26} height={26}>
                                 <div className="h-full w-full flex items-center justify-center">
-                                    <Flag className={`h-5 w-5 ${allCleared ? 'text-white' : 'text-pod-muted'}`} />
+                                    <Flag className={`h-5 w-5 ${allCleared ? 'text-white' : 'text-pod-primary'}`} />
                                 </div>
                             </foreignObject>
                             <foreignObject x={flagPosition.x - COL_W / 2 + 8} y={flagPosition.y + NODE_R + 10} width={COL_W - 16} height={40}>
@@ -163,7 +182,7 @@ export default function CareerRoadmapMap({ roleTitle, skillGap, capabilityGap }:
                         </g>
                     </svg>
                 </div>
-            )}
+            ))}
         </div>
     )
 }

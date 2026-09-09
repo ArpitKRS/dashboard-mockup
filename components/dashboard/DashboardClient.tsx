@@ -13,8 +13,9 @@ import {
     type ResumeRoleSummary,
     type ResumeCertification,
 } from './mockResumeData'
+import { MOCK_CAPABILITY_ANSWERS } from './mockCapabilityAnswers'
 import { type CapabilityAnswers, type CapabilityAnswer, isCapabilityFormComplete } from '@/lib/capabilityForm'
-import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap } from '@/lib/futureRole'
+import { getRoleSkillProfile, getArchetypeProfile, mergeRoleAndArchetype, computeSkillGap, computeCapabilityGap, computeOverallMatch, getAdjacentRoleMatches } from '@/lib/futureRole'
 import ProfileBanner from './ProfileBanner'
 import CurrentCapabilityCard from './CurrentCapabilityCard'
 import ProfileCapabilityReflection from './ProfileCapabilityReflection'
@@ -37,32 +38,41 @@ const MOCK_RESUME_PROCESSING_MS = 1200
  * (matching the reference screenshot) isn't useful here.
  */
 export default function DashboardClient() {
+    // Seeded as a fully-built-out mock member ("Jordan Ellis") rather than an
+    // empty brand-new profile — every section below should render its
+    // completed state the moment the page loads, not a blank prompt to fill
+    // it in. See mockResumeData.ts/mockCapabilityAnswers.ts for the rest of
+    // this persona's data.
     const [firstName] = useState('Jordan')
     const [lastName] = useState('Ellis')
     const [email] = useState('jordan.ellis@example.com')
-    const [resumeFileName, setResumeFileName] = useState<string | null>(null)
-    const [capabilityAnswers, setCapabilityAnswers] = useState<CapabilityAnswers>({})
-    const [capabilityCompletedAt, setCapabilityCompletedAt] = useState<string | null>(null)
+    const [resumeFileName, setResumeFileName] = useState<string | null>('resume.pdf')
+    const [capabilityAnswers, setCapabilityAnswers] = useState<CapabilityAnswers>(MOCK_CAPABILITY_ANSWERS)
+    const [capabilityCompletedAt, setCapabilityCompletedAt] = useState<string | null>('2026-08-20T09:15:00.000Z')
 
     // The Dashboard's own copy of what the resume produced.
-    const [skills, setSkills] = useState<string[]>([])
-    const [interests, setInterests] = useState<string[]>([])
-    const [resumeSummary, setResumeSummary] = useState<string | null>(null)
-    const [resumeRoles, setResumeRoles] = useState<ResumeRoleSummary[] | null>(null)
-    const [resumeEducation, setResumeEducation] = useState<string | null>(null)
-    const [resumeCertifications, setResumeCertifications] = useState<ResumeCertification[] | null>(null)
+    const [skills, setSkills] = useState<string[]>(MOCK_RESUME_SKILLS)
+    const [interests, setInterests] = useState<string[]>(MOCK_RESUME_INTERESTS)
+    const [resumeSummary, setResumeSummary] = useState<string | null>(MOCK_RESUME_SUMMARY)
+    const [resumeRoles, setResumeRoles] = useState<ResumeRoleSummary[] | null>(MOCK_RESUME_ROLES)
+    const [resumeEducation, setResumeEducation] = useState<string | null>(MOCK_RESUME_EDUCATION)
+    const [resumeCertifications, setResumeCertifications] = useState<ResumeCertification[] | null>(MOCK_RESUME_CERTIFICATIONS)
 
     // Lifted out of ProfileCapabilityReflection (rather than left local there)
     // so the PDF export below can derive the same role/skill-gap data.
-    const [submittedGoal, setSubmittedGoal] = useState<string | null>(null)
+    const [submittedGoal, setSubmittedGoal] = useState<string | null>('Senior Software Engineer')
 
     // Manually-typed reflections for the Future Role & Roadmap tab — unlike
     // submittedGoal, these never get computed against anything; they're the
     // user's own words, lifted here only so a future PDF pass can include
     // them the same way it already does for submittedGoal.
-    const [personalVisionStatement, setPersonalVisionStatement] = useState('')
-    const [sixTwelveMonthPlan, setSixTwelveMonthPlan] = useState('')
-    const [futureVisionArchetype, setFutureVisionArchetype] = useState<string | null>(null)
+    const [personalVisionStatement, setPersonalVisionStatement] = useState(
+        'I want to grow into a technical leader who ships reliable software and helps the people around me level up just as fast as I do.'
+    )
+    const [sixTwelveMonthPlan, setSixTwelveMonthPlan] = useState(
+        'Lead the next major feature end-to-end, start mentoring a junior engineer formally, and close out the AWS Solutions Architect certification.'
+    )
+    const [futureVisionArchetype, setFutureVisionArchetype] = useState<string | null>('expert')
 
     const [showCapabilityForm, setShowCapabilityForm] = useState(false)
     const [isExporting, setIsExporting] = useState(false)
@@ -80,6 +90,14 @@ export default function DashboardClient() {
     const roleProfile = mergeRoleAndArchetype(baseRoleProfile, archetypeProfile)
     const skillGap = roleProfile ? computeSkillGap(skills, roleProfile.requiredSkills) : null
     const capabilityGap = roleProfile ? computeCapabilityGap(capabilityAnswers, roleProfile.requiredCapabilities) : null
+    const overallMatch = skillGap && capabilityGap ? computeOverallMatch(skillGap, capabilityGap) : 0
+
+    // Predictive Recommendation studies the whole dashboard against the main
+    // goal (above) and, separately, against up to two adjacent roles — same
+    // scoring method, just pointed at a different destination.
+    const adjacentRoles = roleProfile ? getAdjacentRoleMatches(roleProfile.roleTitle, skills, capabilityAnswers) : []
+
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Member'
 
     // Picking a file simulates the resume-parse result with fixed mock data
     // regardless of what was picked — no modal, no backend call.
@@ -120,7 +138,6 @@ export default function DashboardClient() {
         if (isExporting) return
         setIsExporting(true)
         try {
-            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Dashboard'
             const exportedAt = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 
             const blob = await pdf(
@@ -156,7 +173,7 @@ export default function DashboardClient() {
             setIsExporting(false)
         }
     }, [
-        isExporting, firstName, lastName, email, completionPct, resumeFileName, resumeSummary,
+        isExporting, fullName, email, completionPct, resumeFileName, resumeSummary,
         resumeRoles, skills, interests, capabilityCompleted, capabilityAnswers, submittedGoal,
         futureVisionArchetype, roleProfile, skillGap, capabilityGap,
     ])
@@ -168,7 +185,6 @@ export default function DashboardClient() {
                 lastName={lastName}
                 email={email}
                 completionPct={completionPct}
-                capabilityAnswers={capabilityAnswers}
                 resumeUploaded={resumeUploaded}
                 resumeFileName={resumeFileName}
                 capabilityCompleted={capabilityCompleted}
@@ -176,6 +192,9 @@ export default function DashboardClient() {
                 onCapabilityFormClick={() => setShowCapabilityForm(true)}
                 onExportClick={handleExportClick}
                 isExporting={isExporting}
+                mainRoleTitle={roleProfile?.roleTitle ?? null}
+                overallMatch={overallMatch}
+                adjacentRoles={adjacentRoles}
             />
 
             <CurrentCapabilityCard summary={resumeSummary} />
@@ -187,7 +206,6 @@ export default function DashboardClient() {
                 skills={skills}
                 interests={interests}
                 resumeRoles={resumeRoles}
-                resumeCertifications={resumeCertifications}
                 submittedGoal={submittedGoal}
                 onGoalSubmit={setSubmittedGoal}
                 personalVisionStatement={personalVisionStatement}
@@ -201,7 +219,7 @@ export default function DashboardClient() {
 
             <ProgressCountsPanel />
 
-            <AuthenticatedCapabilitySection />
+            <AuthenticatedCapabilitySection achievements={resumeCertifications} fullName={fullName} />
 
             <input
                 ref={resumeFileInputRef}

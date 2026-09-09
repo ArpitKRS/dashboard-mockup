@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
     Pencil,
     Check,
+    ChevronDown,
     BookOpen,
     Compass,
     Trophy,
@@ -44,16 +45,39 @@ interface CapabilityGraphGridProps {
     onAnswerChange: (questionId: string, answer: CapabilityAnswer) => void
 }
 
-function EditToggleButton({ editing, onClick }: { editing: boolean; onClick: () => void }) {
+function EditToggleButton({ editing, onClick, positionClassName = 'top-3 right-3' }: { editing: boolean; onClick: () => void; positionClassName?: string }) {
     return (
         <button
             type="button"
             onClick={onClick}
             aria-label={editing ? 'Cancel edit' : 'Edit this section'}
-            className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-white border border-pod-border px-2 py-1 text-[11px] font-semibold text-pod-muted hover:text-pod-primary hover:border-pod-primary-medium transition-colors"
+            className={`absolute inline-flex items-center gap-1 rounded-full bg-white border border-pod-border px-2 py-1 text-[11px] font-semibold text-pod-muted hover:text-pod-primary hover:border-pod-primary-medium transition-colors ${positionClassName}`}
         >
             <Pencil className="h-3 w-3" />
             {editing ? 'Cancel' : 'Edit'}
+        </button>
+    )
+}
+
+/** Row header used by every collapsible card below — icon box, title, and
+ *  chevron, matching ProgressCountsPanel's ProgressRow exactly so the two
+ *  "list of expandable sections" areas on the page read as one visual
+ *  language. Deliberately neutral (bg-pod-primary-light icon, no per-category
+ *  tint) — the category's own accent color only shows up once a row is
+ *  expanded, inside its content. */
+function CardRowHeader({ icon, title, open, onToggle }: { icon: React.ReactNode; title: React.ReactNode; open: boolean; onToggle: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-pod-bg-soft transition-colors"
+        >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pod-primary-light text-pod-primary">
+                {icon}
+            </span>
+            <span className="flex-1 text-sm font-semibold text-pod-text">{title}</span>
+            <ChevronDown aria-hidden className={`h-5 w-5 shrink-0 text-pod-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
         </button>
     )
 }
@@ -138,6 +162,7 @@ function MultiScaleRadarCard({
     onChange: (questionId: string, answer: CapabilityAnswer) => void
 }) {
     const [editing, setEditing] = useState(false)
+    const [open, setOpen] = useState(false)
     const scores = answer?.type === 'multi-scale' ? answer.scores : {}
     const axes = question.dimensions.map(d => d.label.split(' (')[0])
     const values = question.dimensions.map(d => scores[d.id]?.value ?? null)
@@ -147,45 +172,56 @@ function MultiScaleRadarCard({
         onChange(question.id, { type: 'multi-scale', scores: { ...scores, [dimensionId]: { value } } })
     }
 
-    return (
-        <div className="relative rounded-xl border border-pod-border bg-amber-50 p-4">
-            <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} />
-            <div className="flex items-center gap-1.5 mb-3 pr-16">
-                <Compass className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">{question.title}</p>
-            </div>
+    const toggleOpen = () => {
+        if (open) setEditing(false)
+        setOpen(o => !o)
+    }
 
-            {!editing ? (
-                <div>
-                    <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center">
-                        <RadarChart axes={axes} values={values} max={question.max} accent="#F59E0B" />
-                        <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:min-w-[220px]">
-                            {question.dimensions.map((dim, i) => (
-                                <div key={dim.id} className="rounded-lg bg-white/70 px-3 py-2.5">
-                                    <p className="text-[11px] font-semibold text-pod-text">{dim.emoji} {axes[i]}</p>
-                                    <p className="text-lg font-bold text-amber-700 tabular-nums">
-                                        {values[i] ?? '–'}<span className="text-xs font-medium text-pod-muted">/{question.max}</span>
-                                    </p>
+    return (
+        <div className="relative">
+            {open && <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} positionClassName="right-12 top-1/2 -translate-y-1/2" />}
+            <CardRowHeader
+                icon={<Compass className="h-4.5 w-4.5" aria-hidden />}
+                title={question.title}
+                open={open}
+                onToggle={toggleOpen}
+            />
+
+            {open && (
+                <div className="bg-amber-50 px-5 py-4">
+                    {!editing ? (
+                        <div>
+                            <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center">
+                                <RadarChart axes={axes} values={values} max={question.max} accent="#F59E0B" />
+                                <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:min-w-[220px]">
+                                    {question.dimensions.map((dim, i) => (
+                                        <div key={dim.id} className="rounded-lg bg-white/70 px-3 py-2.5">
+                                            <p className="text-[11px] font-semibold text-pod-text">{dim.emoji} {axes[i]}</p>
+                                            <p className="text-lg font-bold text-amber-700 tabular-nums">
+                                                {values[i] ?? '–'}<span className="text-xs font-medium text-pod-muted">/{question.max}</span>
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="mt-3 text-center text-[11px] text-pod-muted">{answeredCount}/{question.dimensions.length} rated</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {question.dimensions.map(dim => (
+                                <div key={dim.id}>
+                                    <p className="text-xs font-semibold text-pod-text mb-1.5">{dim.emoji} {dim.label}</p>
+                                    <ScorePillRow
+                                        min={question.min}
+                                        max={question.max}
+                                        legend={question.scaleLegend}
+                                        value={scores[dim.id]?.value}
+                                        onSelect={v => pick(dim.id, v)}
+                                    />
                                 </div>
                             ))}
                         </div>
-                    </div>
-                    <p className="mt-3 text-center text-[11px] text-pod-muted">{answeredCount}/{question.dimensions.length} rated</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {question.dimensions.map(dim => (
-                        <div key={dim.id}>
-                            <p className="text-xs font-semibold text-pod-text mb-1.5">{dim.emoji} {dim.label}</p>
-                            <ScorePillRow
-                                min={question.min}
-                                max={question.max}
-                                legend={question.scaleLegend}
-                                value={scores[dim.id]?.value}
-                                onSelect={v => pick(dim.id, v)}
-                            />
-                        </div>
-                    ))}
+                    )}
                 </div>
             )}
         </div>
@@ -209,6 +245,7 @@ function ProficiencyRadarCard({
     onChange: (questionId: string, answer: CapabilityAnswer) => void
 }) {
     const [editing, setEditing] = useState(false)
+    const [open, setOpen] = useState(false)
     const averages = deriveProficiencyCompetencyAverages(question, answers)
     const axes = averages.map(a => PROFICIENCY_RADAR_LABELS[a.competencyId] ?? a.title)
     const values = averages.map(a => a.average)
@@ -221,40 +258,51 @@ function ProficiencyRadarCard({
         onChange(question.id, { type: 'proficiency-matrix', scores: { ...scores, [indicatorId]: value } })
     }
 
-    return (
-        <div className="relative rounded-xl border border-pod-border bg-indigo-50 p-4">
-            <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} />
-            <div className="flex items-center gap-1.5 mb-3 pr-16">
-                <Target className="h-3.5 w-3.5 shrink-0 text-indigo-600" aria-hidden />
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">{question.title}</p>
-            </div>
+    const toggleOpen = () => {
+        if (open) setEditing(false)
+        setOpen(o => !o)
+    }
 
-            {!editing ? (
-                <div className="flex flex-col items-center">
-                    <RadarChart axes={axes} values={values} max={question.max} accent="#6366F1" size={260} />
-                    <p className="mt-2 text-[11px] text-pod-muted">{answeredCount}/{totalCount} indicators rated</p>
-                </div>
-            ) : (
-                <div className="space-y-5">
-                    {question.competencies.map(competency => (
-                        <div key={competency.id}>
-                            <p className="text-sm font-bold text-pod-text mb-2">{competency.title}</p>
-                            <div className="space-y-3">
-                                {competency.indicators.map((indicator, i) => (
-                                    <div key={indicator.id}>
-                                        <p className="text-xs text-pod-text mb-1.5">{i + 1}. {indicator.label}</p>
-                                        <ScorePillRow
-                                            min={question.min}
-                                            max={question.max}
-                                            legend={question.scaleLegend}
-                                            value={scores[indicator.id]}
-                                            onSelect={v => pick(indicator.id, v)}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
+    return (
+        <div className="relative">
+            {open && <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} positionClassName="right-12 top-1/2 -translate-y-1/2" />}
+            <CardRowHeader
+                icon={<Target className="h-4.5 w-4.5" aria-hidden />}
+                title={question.title}
+                open={open}
+                onToggle={toggleOpen}
+            />
+
+            {open && (
+                <div className="bg-indigo-50 px-5 py-4">
+                    {!editing ? (
+                        <div className="flex flex-col items-center">
+                            <RadarChart axes={axes} values={values} max={question.max} accent="#6366F1" size={260} />
+                            <p className="mt-2 text-[11px] text-pod-muted">{answeredCount}/{totalCount} indicators rated</p>
                         </div>
-                    ))}
+                    ) : (
+                        <div className="space-y-5">
+                            {question.competencies.map(competency => (
+                                <div key={competency.id}>
+                                    <p className="text-sm font-bold text-pod-text mb-2">{competency.title}</p>
+                                    <div className="space-y-3">
+                                        {competency.indicators.map((indicator, i) => (
+                                            <div key={indicator.id}>
+                                                <p className="text-xs text-pod-text mb-1.5">{i + 1}. {indicator.label}</p>
+                                                <ScorePillRow
+                                                    min={question.min}
+                                                    max={question.max}
+                                                    legend={question.scaleLegend}
+                                                    value={scores[indicator.id]}
+                                                    onSelect={v => pick(indicator.id, v)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -319,6 +367,7 @@ function RankPodiumCard({
     onChange: (questionId: string, answer: CapabilityAnswer) => void
 }) {
     const [editing, setEditing] = useState(false)
+    const [open, setOpen] = useState(false)
     const ranking = answer?.type === 'rank' ? answer.ranking : {}
     const rankedCount = Object.keys(ranking).length
 
@@ -335,70 +384,81 @@ function RankPodiumCard({
         onChange(question.id, { type: 'rank', ranking: next })
     }
 
-    return (
-        <div className="relative rounded-xl border border-pod-border bg-pod-bg-soft p-4">
-            <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} />
-            <div className="flex items-center gap-1.5 mb-3 pr-16">
-                <Trophy className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">Top Drivers</p>
-            </div>
+    const toggleOpen = () => {
+        if (open) setEditing(false)
+        setOpen(o => !o)
+    }
 
-            {!editing ? (
-                <div className="flex flex-col items-center">
-                    <PodiumVisual />
-                    <div className="mt-4 grid w-full max-w-2xl grid-cols-3 gap-3">
-                        {[1, 2, 3].map(r => {
-                            const option = question.options.find(o => ranking[o.id] === r)
-                            const colors = PODIUM_BLOCK_COLORS[r as 1 | 2 | 3]
-                            return (
-                                <div
-                                    key={r}
-                                    className="rounded-xl border-2 px-3 py-3 text-center"
-                                    style={{ backgroundColor: colors.top, borderColor: colors.front }}
-                                >
-                                    <span
-                                        className="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm font-extrabold text-white shadow-sm"
-                                        style={{ backgroundColor: colors.side }}
-                                    >
-                                        {r}
-                                    </span>
-                                    <p className="mt-2 text-sm font-bold leading-tight text-pod-text">{option?.label ?? 'Not ranked yet'}</p>
-                                </div>
-                            )
-                        })}
-                    </div>
-                    <p className="mt-3 text-[11px] text-pod-muted">{rankedCount}/{question.topN} ranked</p>
-                </div>
-            ) : (
-                <div className="space-y-2">
-                    {question.options.map(option => {
-                        const rank = ranking[option.id]
-                        return (
-                            <div key={option.id} className="flex items-center gap-3 rounded-lg border border-pod-border bg-white px-3 py-2.5">
-                                <p className="min-w-0 flex-1 truncate text-xs font-semibold text-pod-text">{option.label}</p>
-                                <div className="flex shrink-0 gap-1.5">
-                                    {[1, 2, 3].map(r => {
-                                        const selected = rank === r
-                                        return (
-                                            <button
-                                                key={r}
-                                                type="button"
-                                                onClick={() => updateRank(option.id, r)}
-                                                title={`Rank ${r}`}
-                                                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition-all ${
-                                                    selected
-                                                        ? 'bg-white shadow-sm ring-2 ring-pod-primary scale-110'
-                                                        : 'border border-pod-border bg-white opacity-50 hover:opacity-100'
-                                                }`}
+    return (
+        <div className="relative">
+            {open && <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} positionClassName="right-12 top-1/2 -translate-y-1/2" />}
+            <CardRowHeader
+                icon={<Trophy className="h-4.5 w-4.5" aria-hidden />}
+                title="Top Drivers"
+                open={open}
+                onToggle={toggleOpen}
+            />
+
+            {open && (
+                <div className="bg-pod-bg-soft px-5 py-4">
+                    {!editing ? (
+                        <div className="flex flex-col items-center">
+                            <PodiumVisual />
+                            <div className="mt-4 grid w-full max-w-2xl grid-cols-3 gap-3">
+                                {[1, 2, 3].map(r => {
+                                    const option = question.options.find(o => ranking[o.id] === r)
+                                    const colors = PODIUM_BLOCK_COLORS[r as 1 | 2 | 3]
+                                    return (
+                                        <div
+                                            key={r}
+                                            className="rounded-xl border-2 px-3 py-3 text-center"
+                                            style={{ backgroundColor: colors.top, borderColor: colors.front }}
+                                        >
+                                            <span
+                                                className="mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm font-extrabold text-white shadow-sm"
+                                                style={{ backgroundColor: colors.side }}
                                             >
-                                                {RANK_MEDALS[r - 1]}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
+                                                {r}
+                                            </span>
+                                            <p className="mt-2 text-sm font-bold leading-tight text-pod-text">{option?.label ?? 'Not ranked yet'}</p>
+                                        </div>
+                                    )
+                                })}
                             </div>
-                        )
-                    })}
+                            <p className="mt-3 text-[11px] text-pod-muted">{rankedCount}/{question.topN} ranked</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {question.options.map(option => {
+                                const rank = ranking[option.id]
+                                return (
+                                    <div key={option.id} className="flex items-center gap-3 rounded-lg border border-pod-border bg-white px-3 py-2.5">
+                                        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-pod-text">{option.label}</p>
+                                        <div className="flex shrink-0 gap-1.5">
+                                            {[1, 2, 3].map(r => {
+                                                const selected = rank === r
+                                                return (
+                                                    <button
+                                                        key={r}
+                                                        type="button"
+                                                        onClick={() => updateRank(option.id, r)}
+                                                        title={`Rank ${r}`}
+                                                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition-all ${
+                                                            selected
+                                                                ? 'bg-white shadow-sm ring-2 ring-pod-primary scale-110'
+                                                                : 'border border-pod-border bg-white opacity-50 hover:opacity-100'
+                                                        }`}
+                                                    >
+                                                        {RANK_MEDALS[r - 1]}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -419,6 +479,7 @@ function HabitDistributionCard({
     onChange: (questionId: string, answer: CapabilityAnswer) => void
 }) {
     const [editing, setEditing] = useState(false)
+    const [open, setOpen] = useState(false)
     const answer = answers[question.id]
     const selections = answer?.type === 'habit-checklist' ? answer.selections : {}
     const answeredCount = Object.values(selections).filter(Boolean).length
@@ -427,64 +488,75 @@ function HabitDistributionCard({
         onChange(question.id, { type: 'habit-checklist', selections: { ...selections, [itemId]: optionId } })
     }
 
-    return (
-        <div className="relative rounded-xl border border-pod-border bg-teal-50 p-4">
-            <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} />
-            <div className="flex items-center gap-1.5 mb-3 pr-16">
-                <BarChart3 className="h-3.5 w-3.5 shrink-0 text-teal-600" aria-hidden />
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">{question.title}</p>
-            </div>
+    const toggleOpen = () => {
+        if (open) setEditing(false)
+        setOpen(o => !o)
+    }
 
-            {!editing ? (
-                <div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {question.items.map(item => {
-                            const optionIndex = question.options.findIndex(o => o.id === selections[item.id])
-                            const option = optionIndex >= 0 ? question.options[optionIndex] : undefined
-                            const color = optionIndex >= 0 ? HABIT_TIER_HEX[optionIndex] : undefined
-                            return (
-                                <div
-                                    key={item.id}
-                                    className="rounded-lg border px-2.5 py-2 text-center"
-                                    style={{ backgroundColor: color ? `${color}1A` : '#FFFFFF', borderColor: color ?? '#E5E7EB' }}
-                                >
-                                    <p className="text-[10px] font-semibold leading-tight text-pod-text">{item.emoji} {item.label}</p>
-                                    <p className="mt-1 text-[10px] font-bold" style={{ color: color ?? '#9CA3AF' }}>
-                                        {option?.label ?? 'Not answered'}
-                                    </p>
-                                </div>
-                            )
-                        })}
-                    </div>
-                    <p className="mt-3 text-[11px] text-pod-muted">{answeredCount}/{question.items.length} answered</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {question.items.map(item => (
-                        <div key={item.id}>
-                            <p className="text-xs font-semibold text-pod-text mb-1.5">{item.emoji} {item.label}</p>
-                            <div className="flex flex-wrap gap-1.5">
-                                {question.options.map((option, i) => {
-                                    const selected = selections[item.id] === option.id
+    return (
+        <div className="relative">
+            {open && <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} positionClassName="right-12 top-1/2 -translate-y-1/2" />}
+            <CardRowHeader
+                icon={<BarChart3 className="h-4.5 w-4.5" aria-hidden />}
+                title={question.title}
+                open={open}
+                onToggle={toggleOpen}
+            />
+
+            {open && (
+                <div className="bg-teal-50 px-5 py-4">
+                    {!editing ? (
+                        <div>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {question.items.map(item => {
+                                    const optionIndex = question.options.findIndex(o => o.id === selections[item.id])
+                                    const option = optionIndex >= 0 ? question.options[optionIndex] : undefined
+                                    const color = optionIndex >= 0 ? HABIT_TIER_HEX[optionIndex] : undefined
                                     return (
-                                        <button
-                                            key={option.id}
-                                            type="button"
-                                            onClick={() => pick(item.id, option.id)}
-                                            className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                                            style={
-                                                selected
-                                                    ? { backgroundColor: HABIT_TIER_HEX[i], borderColor: HABIT_TIER_HEX[i], color: '#ffffff' }
-                                                    : { borderColor: '#D9D9D9', backgroundColor: '#ffffff', color: '#303030' }
-                                            }
+                                        <div
+                                            key={item.id}
+                                            className="rounded-lg border px-2.5 py-2 text-center"
+                                            style={{ backgroundColor: color ? `${color}1A` : '#FFFFFF', borderColor: color ?? '#E5E7EB' }}
                                         >
-                                            {option.emoji} {option.label}
-                                        </button>
+                                            <p className="text-[10px] font-semibold leading-tight text-pod-text">{item.emoji} {item.label}</p>
+                                            <p className="mt-1 text-[10px] font-bold" style={{ color: color ?? '#9CA3AF' }}>
+                                                {option?.label ?? 'Not answered'}
+                                            </p>
+                                        </div>
                                     )
                                 })}
                             </div>
+                            <p className="mt-3 text-[11px] text-pod-muted">{answeredCount}/{question.items.length} answered</p>
                         </div>
-                    ))}
+                    ) : (
+                        <div className="space-y-3">
+                            {question.items.map(item => (
+                                <div key={item.id}>
+                                    <p className="text-xs font-semibold text-pod-text mb-1.5">{item.emoji} {item.label}</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {question.options.map((option, i) => {
+                                            const selected = selections[item.id] === option.id
+                                            return (
+                                                <button
+                                                    key={option.id}
+                                                    type="button"
+                                                    onClick={() => pick(item.id, option.id)}
+                                                    className="rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                                                    style={
+                                                        selected
+                                                            ? { backgroundColor: HABIT_TIER_HEX[i], borderColor: HABIT_TIER_HEX[i], color: '#ffffff' }
+                                                            : { borderColor: '#D9D9D9', backgroundColor: '#ffffff', color: '#303030' }
+                                                    }
+                                                >
+                                                    {option.emoji} {option.label}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -505,6 +577,7 @@ function DiagnosticPanelCard({
     onChange: (questionId: string, answer: CapabilityAnswer) => void
 }) {
     const [editing, setEditing] = useState(false)
+    const [open, setOpen] = useState(false)
     const rows = answer?.type === 'diagnostic-panel' ? answer.rows : {}
 
     const setText = (rowId: string, text: string) => {
@@ -516,91 +589,102 @@ function DiagnosticPanelCard({
         onChange(question.id, { type: 'diagnostic-panel', rows: { ...rows, [rowId]: { ...rows[rowId], optionIds: next } } })
     }
 
-    return (
-        <div className="relative rounded-xl border border-pod-border bg-violet-50 p-4">
-            <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} />
-            <div className="flex items-center gap-1.5 mb-3 pr-16">
-                <span className="text-sm">{question.emoji}</span>
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted">{question.title}</p>
-            </div>
+    const toggleOpen = () => {
+        if (open) setEditing(false)
+        setOpen(o => !o)
+    }
 
-            {!editing ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {question.rows.map(row => {
-                        const rowAnswer = rows[row.id]
-                        if (row.type === 'text') {
-                            const text = rowAnswer?.text?.trim()
-                            return (
-                                <div key={row.id} className="rounded-lg border border-pod-border bg-white p-3">
-                                    <p className="text-[11px] font-bold text-pod-muted mb-1">{row.emoji} {row.label}</p>
-                                    <p className={`text-xs leading-relaxed ${text ? 'italic text-pod-text' : 'text-pod-muted'}`}>
-                                        {text ? `“${text}”` : 'Not answered yet'}
-                                    </p>
-                                </div>
-                            )
-                        }
-                        const selected = row.options.filter(o => rowAnswer?.optionIds?.includes(o.id))
-                        return (
-                            <div key={row.id} className="rounded-lg border border-pod-border bg-white p-3">
-                                <p className="text-[11px] font-bold text-pod-muted mb-1.5">{row.emoji} {row.label}</p>
-                                {selected.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1">
-                                        {selected.map(o => (
-                                            <span key={o.id} className="rounded-full bg-pod-primary-light px-2 py-0.5 text-[10px] font-semibold text-pod-primary">
-                                                {o.label}
-                                            </span>
-                                        ))}
+    return (
+        <div className="relative">
+            {open && <EditToggleButton editing={editing} onClick={() => setEditing(e => !e)} positionClassName="right-12 top-1/2 -translate-y-1/2" />}
+            <CardRowHeader
+                icon={<span className="text-base leading-none">{question.emoji}</span>}
+                title={question.title}
+                open={open}
+                onToggle={toggleOpen}
+            />
+
+            {open && (
+                <div className="bg-violet-50 px-5 py-4">
+                    {!editing ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {question.rows.map(row => {
+                                const rowAnswer = rows[row.id]
+                                if (row.type === 'text') {
+                                    const text = rowAnswer?.text?.trim()
+                                    return (
+                                        <div key={row.id} className="rounded-lg border border-pod-border bg-white p-3">
+                                            <p className="text-[11px] font-bold text-pod-muted mb-1">{row.emoji} {row.label}</p>
+                                            <p className={`text-xs leading-relaxed ${text ? 'italic text-pod-text' : 'text-pod-muted'}`}>
+                                                {text ? `“${text}”` : 'Not answered yet'}
+                                            </p>
+                                        </div>
+                                    )
+                                }
+                                const selected = row.options.filter(o => rowAnswer?.optionIds?.includes(o.id))
+                                return (
+                                    <div key={row.id} className="rounded-lg border border-pod-border bg-white p-3">
+                                        <p className="text-[11px] font-bold text-pod-muted mb-1.5">{row.emoji} {row.label}</p>
+                                        {selected.length > 0 ? (
+                                            <div className="flex flex-wrap gap-1">
+                                                {selected.map(o => (
+                                                    <span key={o.id} className="rounded-full bg-pod-primary-light px-2 py-0.5 text-[10px] font-semibold text-pod-primary">
+                                                        {o.label}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-pod-muted">Not answered yet</p>
+                                        )}
                                     </div>
-                                ) : (
-                                    <p className="text-xs text-pod-muted">Not answered yet</p>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-            ) : (
-                <div className="space-y-4">
-                    {question.rows.map(row => {
-                        const rowAnswer = rows[row.id]
-                        if (row.type === 'text') {
-                            return (
-                                <div key={row.id}>
-                                    <p className="text-xs font-semibold text-pod-text mb-1.5">{row.emoji} {row.label}</p>
-                                    <textarea
-                                        value={rowAnswer?.text ?? ''}
-                                        onChange={e => setText(row.id, e.target.value)}
-                                        placeholder={row.placeholder}
-                                        rows={2}
-                                        className="w-full rounded-lg border border-pod-border bg-white px-3 py-2 text-xs text-pod-text outline-none transition resize-none focus:border-transparent focus:ring-2 focus:ring-pod-primary"
-                                    />
-                                </div>
-                            )
-                        }
-                        return (
-                            <div key={row.id}>
-                                <p className="text-xs font-semibold text-pod-text mb-1.5">{row.emoji} {row.label}</p>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {row.options.map(option => {
-                                        const selected = Boolean(rowAnswer?.optionIds?.includes(option.id))
-                                        return (
-                                            <button
-                                                key={option.id}
-                                                type="button"
-                                                onClick={() => toggleOption(row.id, option.id)}
-                                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                                                    selected
-                                                        ? 'border-pod-primary bg-pod-primary-light text-pod-text'
-                                                        : 'border-pod-border bg-white text-pod-text hover:border-pod-primary-medium'
-                                                }`}
-                                            >
-                                                {selected ? '✅' : '⬜'} {option.label}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )
-                    })}
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {question.rows.map(row => {
+                                const rowAnswer = rows[row.id]
+                                if (row.type === 'text') {
+                                    return (
+                                        <div key={row.id}>
+                                            <p className="text-xs font-semibold text-pod-text mb-1.5">{row.emoji} {row.label}</p>
+                                            <textarea
+                                                value={rowAnswer?.text ?? ''}
+                                                onChange={e => setText(row.id, e.target.value)}
+                                                placeholder={row.placeholder}
+                                                rows={2}
+                                                className="w-full rounded-lg border border-pod-border bg-white px-3 py-2 text-xs text-pod-text outline-none transition resize-none focus:border-transparent focus:ring-2 focus:ring-pod-primary"
+                                            />
+                                        </div>
+                                    )
+                                }
+                                return (
+                                    <div key={row.id}>
+                                        <p className="text-xs font-semibold text-pod-text mb-1.5">{row.emoji} {row.label}</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {row.options.map(option => {
+                                                const selected = Boolean(rowAnswer?.optionIds?.includes(option.id))
+                                                return (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        onClick={() => toggleOption(row.id, option.id)}
+                                                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                                                            selected
+                                                                ? 'border-pod-primary bg-pod-primary-light text-pod-text'
+                                                                : 'border-pod-border bg-white text-pod-text hover:border-pod-primary-medium'
+                                                        }`}
+                                                    >
+                                                        {selected ? '✅' : '⬜'} {option.label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -711,25 +795,35 @@ export default function CapabilityGraphGrid({ answers, onAnswerChange }: Capabil
             <CapabilityInsightBanner answers={answers} />
 
             <div className="space-y-4">
-                {CAPABILITY_QUESTIONS.map(question => {
-                    const answer = answers[question.id]
-                    switch (question.type) {
-                        case 'text':
-                            return <TextQuestionCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
-                        case 'multi-scale':
-                            return <MultiScaleRadarCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
-                        case 'diagnostic-panel':
-                            return <DiagnosticPanelCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
-                        case 'rank':
-                            return <RankPodiumCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
-                        case 'proficiency-matrix':
-                            return <ProficiencyRadarCard key={question.id} question={question} answers={answers} onChange={onAnswerChange} />
-                        case 'habit-checklist':
-                            return <HabitDistributionCard key={question.id} question={question} answers={answers} onChange={onAnswerChange} />
-                        default:
-                            return null
-                    }
-                })}
+                {CAPABILITY_QUESTIONS.filter(q => q.type === 'text').map(question => (
+                    <TextQuestionCard key={question.id} question={question} answer={answers[question.id]} onChange={onAnswerChange} />
+                ))}
+
+                {/* Every other question shares one unified card, divided into
+                    rows — same structure as Status & Progress's card, so the
+                    two "list of expandable sections" areas on the page read
+                    consistently. Each row's own accent color only shows up
+                    once expanded (see the bg-*-50 wrappers inside each card
+                    above); the collapsed row header stays neutral. */}
+                <div className="rounded-2xl border border-pod-border bg-white shadow-sm divide-y divide-pod-border overflow-hidden">
+                    {CAPABILITY_QUESTIONS.filter(q => q.type !== 'text').map(question => {
+                        const answer = answers[question.id]
+                        switch (question.type) {
+                            case 'multi-scale':
+                                return <MultiScaleRadarCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
+                            case 'diagnostic-panel':
+                                return <DiagnosticPanelCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
+                            case 'rank':
+                                return <RankPodiumCard key={question.id} question={question} answer={answer} onChange={onAnswerChange} />
+                            case 'proficiency-matrix':
+                                return <ProficiencyRadarCard key={question.id} question={question} answers={answers} onChange={onAnswerChange} />
+                            case 'habit-checklist':
+                                return <HabitDistributionCard key={question.id} question={question} answers={answers} onChange={onAnswerChange} />
+                            default:
+                                return null
+                        }
+                    })}
+                </div>
             </div>
         </div>
     )

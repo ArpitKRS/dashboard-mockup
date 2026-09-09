@@ -1,18 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, X, Download, FileUp, ClipboardList, Check, type LucideIcon } from 'lucide-react'
+import { Sparkles, Download, FileUp, ClipboardList, Check, TrendingUp, ArrowRight, type LucideIcon } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import UserAvatar from '@/components/ui/UserAvatar'
-import { getCapabilitySuggestion } from '@/lib/capabilitySuggestions'
-import type { CapabilityAnswers } from '@/lib/capabilityForm'
+import Modal from '@/components/ui/Modal'
+import type { AdjacentRoleMatch } from '@/lib/futureRole'
 
 interface ProfileBannerProps {
     firstName: string
     lastName: string
     email: string
     completionPct: number
-    capabilityAnswers: CapabilityAnswers
     resumeUploaded: boolean
     resumeFileName: string | null
     capabilityCompleted: boolean
@@ -23,6 +22,13 @@ interface ProfileBannerProps {
      *  component only renders the button and reports clicks. */
     onExportClick: () => void
     isExporting: boolean
+    /** The three fields the Predictive Recommendation popover needs — all
+     *  derived in DashboardClient (same roleProfile/skillGap/capabilityGap
+     *  the Roadmap uses) and handed down already computed, so this component
+     *  stays a pure renderer rather than re-deriving them itself. */
+    mainRoleTitle: string | null
+    overallMatch: number
+    adjacentRoles: AdjacentRoleMatch[]
 }
 
 /** `compact` shrinks the card once both steps are done — at that point it's
@@ -50,8 +56,8 @@ function StepCard({
             type="button"
             onClick={onClick}
             title={title}
-            className={`relative flex items-center gap-3 rounded-xl border text-left transition-all duration-200 ${
-                compact ? 'px-3 py-2.5' : 'px-4 py-4'
+            className={`relative flex shrink-0 items-center rounded-xl border text-left transition-all duration-200 ${
+                compact ? 'gap-2 px-2.5 py-2' : 'gap-3 px-4 py-4'
             } ${
                 done
                     ? 'border-pod-primary-medium bg-pod-primary-light'
@@ -59,20 +65,20 @@ function StepCard({
             }`}
         >
             <div
-                className={`shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 ${compact ? 'h-7 w-7' : 'h-9 w-9'} ${
+                className={`shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 ${compact ? 'h-6 w-6' : 'h-9 w-9'} ${
                     done ? 'bg-pod-primary text-pod-primary-foreground' : 'bg-white text-pod-primary'
                 }`}
             >
-                <Icon className={compact ? 'h-3.5 w-3.5' : 'h-4.5 w-4.5'} />
+                <Icon className={compact ? 'h-3 w-3' : 'h-4.5 w-4.5'} />
             </div>
-            <span className={`flex-1 min-w-0 truncate font-semibold text-pod-text ${compact ? 'text-xs' : 'text-sm'}`}>{label}</span>
+            <span className={`font-semibold text-pod-text ${compact ? 'whitespace-nowrap text-xs' : 'flex-1 min-w-0 truncate text-sm'}`}>{label}</span>
             {done && (
                 <span
-                    className={`ml-auto shrink-0 rounded-full bg-pod-primary text-pod-primary-foreground flex items-center justify-center transition-all duration-200 ${
-                        compact ? 'h-4 w-4' : 'h-5 w-5'
+                    className={`shrink-0 rounded-full bg-pod-primary text-pod-primary-foreground flex items-center justify-center transition-all duration-200 ${
+                        compact ? 'h-3.5 w-3.5' : 'ml-auto h-5 w-5'
                     }`}
                 >
-                    <Check className={compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+                    <Check className={compact ? 'h-2 w-2' : 'h-3 w-3'} />
                 </span>
             )}
         </button>
@@ -94,7 +100,6 @@ export default function ProfileBanner({
     lastName,
     email,
     completionPct,
-    capabilityAnswers,
     resumeUploaded,
     resumeFileName,
     capabilityCompleted,
@@ -102,32 +107,54 @@ export default function ProfileBanner({
     onCapabilityFormClick,
     onExportClick,
     isExporting,
+    mainRoleTitle,
+    overallMatch,
+    adjacentRoles,
 }: ProfileBannerProps) {
     const fullName = [firstName, lastName].filter(Boolean).join(' ').trim() || 'Welcome'
     const isUnlocked = completionPct >= 50
     const canExport = completionPct >= 50
     const [showSuggestion, setShowSuggestion] = useState(false)
 
-    const suggestion = isUnlocked ? getCapabilitySuggestion(capabilityAnswers) : null
-
     return (
         <article className="rounded-2xl border border-pod-border bg-white shadow-sm overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-4 p-6">
-                <div className="flex items-center gap-4">
-                    <UserAvatar name={fullName} size={56} />
+            <div className="flex items-center gap-3 p-5">
+                <div className="flex shrink-0 items-center gap-3">
+                    <UserAvatar name={fullName} size={44} />
                     <div>
-                        <h1 className="text-xl font-bold text-pod-text">{fullName}</h1>
-                        {email && <p className="text-sm text-pod-muted">{email}</p>}
+                        <h1 className="text-lg font-bold text-pod-text whitespace-nowrap">{fullName}</h1>
+                        {email && <p className="text-xs text-pod-muted whitespace-nowrap">{email}</p>}
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Every banner action — the two setup steps and the two profile
+                    actions — lives in this one right-aligned group alongside the
+                    identity block above, rather than split into a second row
+                    behind a divider. Sized to always fit this one row within the
+                    page's max-w-5xl content width, with no horizontal scroll. */}
+                <div className="flex shrink-0 items-center gap-1.5 ml-auto">
+                    <StepCard
+                        label={resumeUploaded ? (resumeFileName ?? 'Resume uploaded') : 'Resume upload'}
+                        done={resumeUploaded}
+                        compact={completionPct === 100}
+                        icon={FileUp}
+                        onClick={onUploadResumeClick}
+                        title={completionPct === 100 ? 'Want to upload a new resume?' : (resumeFileName ?? undefined)}
+                    />
+                    <StepCard
+                        label="Capability Building Form"
+                        done={capabilityCompleted}
+                        compact={completionPct === 100}
+                        icon={ClipboardList}
+                        onClick={onCapabilityFormClick}
+                        title={completionPct === 100 ? 'Want to re-fill the form?' : undefined}
+                    />
                     <button
                         type="button"
                         onClick={() => canExport && !isExporting && onExportClick()}
                         disabled={!canExport || isExporting}
                         title={canExport ? 'Download a PDF snapshot of your dashboard' : 'Complete at least 50% of your profile to export'}
-                        className={`inline-flex items-center gap-1.5 h-11 rounded-full px-4 text-xs font-bold shadow-sm transition-colors ${
+                        className={`inline-flex shrink-0 items-center gap-1 h-9 rounded-full px-3 text-xs font-bold shadow-sm transition-colors ${
                             canExport
                                 ? 'bg-white text-pod-text border border-pod-border hover:border-pod-primary-medium hover:text-pod-primary'
                                 : 'bg-pod-bg-soft text-pod-muted cursor-not-allowed'
@@ -141,7 +168,7 @@ export default function ProfileBanner({
                         onClick={() => isUnlocked && setShowSuggestion(true)}
                         disabled={!isUnlocked}
                         title={isUnlocked ? 'Get a predictive recommendation' : 'Complete at least 50% of your profile to unlock predictive recommendations'}
-                        className={`inline-flex items-center gap-1.5 h-11 rounded-full px-4 text-xs font-bold shadow-sm transition-colors ${
+                        className={`inline-flex shrink-0 items-center gap-1 h-9 rounded-full px-3 text-xs font-bold shadow-sm transition-colors ${
                             isUnlocked
                                 ? 'bg-pod-primary text-pod-primary-foreground hover:bg-pod-primary-hover'
                                 : 'bg-pod-bg-soft text-pod-muted cursor-not-allowed'
@@ -153,57 +180,64 @@ export default function ProfileBanner({
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-pod-border p-6">
-                <StepCard
-                    label={resumeUploaded ? (resumeFileName ?? 'Resume uploaded') : 'Resume upload'}
-                    done={resumeUploaded}
-                    compact={completionPct === 100}
-                    icon={FileUp}
-                    onClick={onUploadResumeClick}
-                    title={completionPct === 100 ? 'Want to upload a new resume?' : (resumeFileName ?? undefined)}
-                />
-                <StepCard
-                    label="Capability Building Form"
-                    done={capabilityCompleted}
-                    compact={completionPct === 100}
-                    icon={ClipboardList}
-                    onClick={onCapabilityFormClick}
-                    title={completionPct === 100 ? 'Want to re-fill the form?' : undefined}
-                />
-            </div>
-
             {showSuggestion && (
-                <div className="fixed inset-0 z-9999 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowSuggestion(false)} aria-hidden="true" />
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Predictive recommendation"
-                        className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
-                    >
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-pod-primary">
-                                <Sparkles className="h-3.5 w-3.5" /> Predictive Recommendation
-                            </span>
-                            <button type="button" onClick={() => setShowSuggestion(false)} aria-label="Close" className="text-pod-muted hover:text-pod-text transition">
-                                <X className="w-4.5 h-4.5" />
-                            </button>
-                        </div>
-                        <div className="px-5 py-6">
-                            {suggestion ? (
-                                <>
-                                    <h3 className="text-base font-bold text-pod-text mb-1.5">{suggestion.title}</h3>
-                                    <p className="text-sm text-pod-muted leading-relaxed">{suggestion.message}</p>
-                                    <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-pod-muted">
-                                        Based on your {suggestion.category} self-rating ({suggestion.currentLevel.toFixed(1)}/{suggestion.max})
+                <Modal
+                    title="Predictive Recommendation"
+                    icon={<Sparkles className="w-4 h-4 text-pod-primary" />}
+                    onClose={() => setShowSuggestion(false)}
+                    maxWidth="max-w-md"
+                >
+                    {!mainRoleTitle ? (
+                        <p className="text-sm text-pod-muted">
+                            Set a future goal in Personal Career Reflection to unlock a predictive recommendation.
+                        </p>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-3 pb-4 border-b border-pod-border">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-pod-primary-light">
+                                    <span className="text-sm font-extrabold text-pod-primary tabular-nums">{overallMatch}%</span>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-bold uppercase tracking-widest text-pod-muted">Your goal</p>
+                                    <p className="text-sm font-bold text-pod-text truncate">{mainRoleTitle}</p>
+                                    <p className="text-xs text-pod-muted">You&apos;re {overallMatch}% of the way there, based on your whole dashboard.</p>
+                                </div>
+                            </div>
+
+                            {adjacentRoles.length > 0 && (
+                                <div className="mt-4">
+                                    <p className="mb-2.5 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-pod-muted">
+                                        <TrendingUp className="h-3.5 w-3.5" /> Adjacent paths within reach
                                     </p>
-                                </>
-                            ) : (
-                                <p className="text-sm text-pod-muted">Complete your Capability Building Form to get a personalized suggestion.</p>
+                                    <div className="space-y-3">
+                                        {adjacentRoles.map(role => (
+                                            <div key={role.roleTitle} className="rounded-xl border border-pod-border bg-pod-bg-soft p-3.5">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-sm font-semibold text-pod-text">{role.roleTitle}</p>
+                                                    <span className="shrink-0 text-xs font-extrabold text-pod-primary tabular-nums">{role.percent}%</span>
+                                                </div>
+                                                {role.carriedSkills.length > 0 && (
+                                                    <p className="mt-1.5 text-[11px] text-pod-muted">
+                                                        <span className="font-semibold text-emerald-700">Carries over:</span> {role.carriedSkills.join(', ')}
+                                                    </p>
+                                                )}
+                                                {role.neededSkills.length > 0 && (
+                                                    <p className="mt-1 text-[11px] text-pod-muted">
+                                                        <span className="font-semibold text-amber-700">To build:</span> {role.neededSkills.join(', ')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
-                        </div>
-                    </div>
-                </div>
+
+                            <p className="mt-4 inline-flex items-center gap-1 text-[11px] text-pod-muted">
+                                <ArrowRight className="h-3 w-3 shrink-0" /> Map a different goal in Personal Career Reflection to see new adjacent paths.
+                            </p>
+                        </>
+                    )}
+                </Modal>
             )}
         </article>
     )
