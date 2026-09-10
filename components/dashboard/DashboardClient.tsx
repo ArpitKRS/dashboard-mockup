@@ -92,6 +92,17 @@ export default function DashboardClient() {
     const capabilityGap = roleProfile ? computeCapabilityGap(capabilityAnswers, roleProfile.requiredCapabilities) : null
     const overallMatch = skillGap && capabilityGap ? computeOverallMatch(skillGap, capabilityGap) : 0
 
+    // The skill names behind overallMatch's skill half, turned into one
+    // plain sentence by ProfileBanner's buildSkillInsight rather than a
+    // second percentage. (Not doing the equivalent for the capability half:
+    // computeCapabilityGap's "current level" comes from deriveScaleChartData,
+    // which only reads scale-type question answers — and the Capability
+    // Building Form's real 7 questions are none of them scale-type anymore,
+    // so that side is always 0. Surfacing that would just look broken, not
+    // informative.)
+    const skillsMatched = skillGap?.matched ?? []
+    const skillsGaps = skillGap?.gaps ?? []
+
     // Predictive Recommendation studies the whole dashboard against the main
     // goal (above) and, separately, against up to two adjacent roles — same
     // scoring method, just pointed at a different destination.
@@ -194,6 +205,8 @@ export default function DashboardClient() {
                 isExporting={isExporting}
                 mainRoleTitle={roleProfile?.roleTitle ?? null}
                 overallMatch={overallMatch}
+                skillsMatched={skillsMatched}
+                skillsGaps={skillsGaps}
                 adjacentRoles={adjacentRoles}
             />
 
@@ -217,9 +230,9 @@ export default function DashboardClient() {
                 onAnswerChange={handleCapabilityAnswerChange}
             />
 
-            <ProgressCountsPanel />
+            <ProgressCountsPanel achievements={resumeCertifications} />
 
-            <AuthenticatedCapabilitySection achievements={resumeCertifications} fullName={fullName} />
+            <AuthenticatedCapabilitySection fullName={fullName} />
 
             <input
                 ref={resumeFileInputRef}

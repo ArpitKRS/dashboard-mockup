@@ -30,7 +30,7 @@ Every discussion and every deliverable at Osmosis is required to start from a st
 **Current solution**
 - The bucket opens with a **Current Capability** card — a short résumé-derived summary statement — immediately followed by the fuller Personal Career Reflection view. Current Capability is its own visible section, not merged into PCR's body, but it belongs to this bucket: together, the two sit right after the identity banner, so Bucket 1 as a whole is genuinely the first thing the user reaches on the dashboard.
 - Current capability is split into hard skills and soft skills, each pulled from the source that describes it best: hard skills come from the résumé (experience, skills, interests); soft skills come from the Capability Building Form, the aspiration-and-profile document that captures where the user stands today.
-- Achievements extracted from the résumé are **not** shown here — they surface entirely in Bucket 5 (Authenticated Capability), so a credential only ever appears once on the dashboard, in the section where it can actually be verified.
+- Achievements extracted from the résumé are **not** shown here — they surface at the top of Bucket 2 (Status & Progress) instead, as a feel-good, pride-factor trophy shelf, per Poh Moi Kau's direct request (see Bucket 2's Current solution). The verify-by-upload record behind each badge is part of the Bucket 2 also.
 - Résumé extraction and the Capability Building Form are merged into one Personal Career Reflection, rather than kept as two separate outputs.
 - Information is organised into selectable, collapsible views — a "map view vs. street view" model — instead of one long page, so the user opens only the view they want: current state, end goal, or the gap between them.
 
@@ -52,7 +52,8 @@ Every discussion and every deliverable at Osmosis is required to start from a st
 - The user understands their own method of progressing, gets insight into where it's taking them, and can act on decisions that actually serve their goal.
 
 **Current solution**
-- The bucket draws on Learning Paths, Assessments, Assets, Self-Tests, and attended Events — the substrate needed to describe current status — but does not stop at listing them.
+- The bucket opens with a résumé-derived **Achievements** trophy shelf, above everything else in this bucket — one badge per credential, each marked Verified or Not Verified with an icon, plus a tile to add or manage more. This placement is Poh Moi Kau's own, named request: *"we have on the one hand what has been completed and then we have... you collect badges okay let's say badges collected... should be under that progress and status."* That direction was reaffirmed when Saranya relayed to the team that *"Poh Moi requested collecting certifications and badges within the status and progress section to give users a positive, feel-good factor,"* and Arpit agreed to move the layout accordingly.
+- The bucket also draws on Learning Paths, Assessments, Assets, Self-Tests, and attended Events — the substrate needed to describe current status — but does not stop at listing them.
 - AI reviews those items and produces a verdict: is the user rowing in the right direction, and what are the specific plus and minus points behind that verdict?
 - This deliberately avoids becoming a raw "items completed" ledger — logins, completion dates, and attempt counts are exactly the kind of data called out as useless on its own, both to the user and to their future employer.
 
@@ -106,15 +107,14 @@ Every discussion and every deliverable at Osmosis is required to start from a st
 ## Bucket 5 — Authenticated Capability
 
 **Intent**
-- The user wants to show off their achievements backed by a credible source and word of mouth — trust and proper visibility for what they claim, not just the claim itself.
+- The user wants to show off their wins backed by a credible source and word of mouth — trust and proper visibility for what they claim, not just the claim itself.
 
 **Outcome**
-- The user can keep track of their authenticated achievements with a real sense of trust in them, and this bucket doubles as a single storage area holding all of their records in one place.
+- The user can keep track of their authenticated creadibility with a real sense of trust in them, and this bucket doubles as a single storage area holding all of their records in one place.
 
 **Current solution**
-- Achievements pulled from the résumé can be validated by attaching a supporting document — proof, not just a listed line.
 - Users can upload letters of recommendation.
-- Certificates shown here are strictly course-completion credentials earned on the platform itself.
+- Certificates shown here are strictly course-completion credentials earned on the platform itself. (This section is not included in Bucket-2 as this is platform specific & much detailed information about it can be found on the user's course workspace area).
 - Users can invite pod members to write testimonials for them — the word-of-mouth, external-verification layer.
 - All of this feeds a weighted authentication matrix: qualitative signals (testimonials, verified proof, workplace verification) are weighted higher than quantitative ones (certificate counts) — because a certificate alone is a "feel-good factor" that "holds no actual value in proving real capability" by itself.
 
@@ -123,8 +123,7 @@ Every discussion and every deliverable at Osmosis is required to start from a st
 - Having one place for achievements, letters, and certificates means the user isn't reconstructing their credibility from scratch every time someone asks for proof.
 
 **Assumptions**
-- The user has some achievements already listed on their résumé, and has earned at least one certificate on the platform.
-- Today's mock shows a binary verified / not-verified state per achievement..
+- The user has some creadibility already listed, and has earned at least one certificate on the platform.
 
 ---
 

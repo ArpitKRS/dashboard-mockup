@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import {
-    Quote, Trophy, ScrollText, Award, Upload, X, ArrowRight, BadgeCheck, Eye, Download,
+    Quote, ScrollText, Award, Upload, X, ArrowRight, Eye, Download,
     UserPlus, Send, Plus, Trash2, type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,21 +12,9 @@ import Modal from '@/components/ui/Modal'
 import { MOCK_TESTIMONIALS } from './mockTestimonialsData'
 import { MOCK_PLATFORM_CERTIFICATES, type PlatformCertificate } from './mockPlatformCertificates'
 import { MOCK_POD_USERS, type PodUser } from './mockPodUsers'
-import type { ResumeCertification } from './mockResumeData'
 
 interface AuthenticatedCapabilitySectionProps {
-    /** Resume-parsed achievements — the Achievements card's own end goal is to
-     *  list these transferred in from resume parsing, rather than being yet
-     *  another raw upload dropzone. Null until a resume has been uploaded. */
-    achievements: ResumeCertification[] | null
     fullName: string
-}
-
-/** One achievement's uploaded proof — a real File the member picked, kept as
- *  local state only (mocked like every other upload in this project). */
-interface AchievementProof {
-    file: File
-    url: string
 }
 
 /** One uploaded letter of recommendation. */
@@ -35,19 +23,6 @@ interface RecommendationLetter {
     name: string
     fileName: string
     url: string
-}
-
-/** An achievement the member types in themselves, rather than one pulled
- *  from resume parsing — same verify-by-upload flow as a resume achievement
- *  (see AchievementProof/AchievementRow below), just with no issuer line
- *  since there's no resume metadata behind it. Underlying logic (e.g.
- *  matching a typed name against a real credential registry) is a later
- *  decision — for this mock-up, typing a name and clicking Add is enough to
- *  create the (not verified) row. */
-interface ManualAchievement {
-    id: string
-    title: string
-    proof?: AchievementProof
 }
 
 function CredentialCard({
@@ -78,206 +53,6 @@ function CredentialCard({
                 {ctaLabel} <ArrowRight className="h-3.5 w-3.5" />
             </span>
         </button>
-    )
-}
-
-/** One achievement row — the shared verify-by-upload card used for both
- *  résumé-pulled achievements (title + issuer, proof keyed by array index)
- *  and member-typed ones (title only, proof keyed by the achievement's own
- *  id) — same visual treatment either way: a real proof document earns the
- *  "Verified" badge, otherwise it stays "(not verified)" with an upload
- *  affordance. */
-function AchievementRow({
-    title,
-    issuer,
-    proof,
-    onUploadProof,
-    onDelete,
-}: {
-    title: string
-    issuer?: string
-    proof: AchievementProof | undefined
-    onUploadProof: (file: File) => void
-    onDelete: () => void
-}) {
-    const inputRef = useRef<HTMLInputElement>(null)
-
-    return (
-        <div className="rounded-xl border border-pod-border bg-pod-bg-soft p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="text-sm font-semibold text-pod-text">{title}</p>
-                    {issuer && <p className="text-xs text-pod-muted">{issuer}</p>}
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                    {proof ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-                            <BadgeCheck className="h-3.5 w-3.5" /> Verified
-                        </span>
-                    ) : (
-                        <span className="text-[11px] font-medium text-pod-muted">(not verified)</span>
-                    )}
-                    <button
-                        type="button"
-                        onClick={onDelete}
-                        aria-label={`Delete ${title}`}
-                        className="text-pod-muted transition hover:text-red-600"
-                    >
-                        <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                {proof ? (
-                    <>
-                        <span className="min-w-0 max-w-[10rem] truncate text-xs text-pod-muted" title={proof.file.name}>
-                            {proof.file.name}
-                        </span>
-                        <a
-                            href={proof.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
-                        >
-                            <Eye className="h-3.5 w-3.5" /> View
-                        </a>
-                        <a
-                            href={proof.url}
-                            download={proof.file.name}
-                            className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-pod-border bg-white px-2.5 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
-                        >
-                            <Download className="h-3.5 w-3.5" /> Download
-                        </a>
-                        <button
-                            type="button"
-                            onClick={() => inputRef.current?.click()}
-                            className="shrink-0 text-xs font-semibold text-pod-primary transition hover:text-pod-primary-hover"
-                        >
-                            Update
-                        </button>
-                    </>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-pod-border bg-white px-3 py-1.5 text-xs font-semibold text-pod-text transition hover:border-pod-primary-medium hover:text-pod-primary"
-                    >
-                        <Upload className="h-3.5 w-3.5" /> Upload proof to verify
-                    </button>
-                )}
-                <input
-                    ref={inputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={e => {
-                        const file = e.target.files?.[0]
-                        e.target.value = ''
-                        if (file) onUploadProof(file)
-                    }}
-                />
-            </div>
-        </div>
-    )
-}
-
-/** Achievements pop-up: lists what resume parsing found (transferred in from
- *  the Resume area, not typed here) plus whatever the member has typed in
- *  themselves below — same verify-by-upload flow either way. Proof state
- *  lives one level up (AuthenticatedCapabilitySection) so it survives this
- *  modal closing. */
-function AchievementsModal({
-    achievements,
-    proofs,
-    onUploadProof,
-    removedIndices,
-    onDeleteAchievement,
-    manualAchievements,
-    onAddManualAchievement,
-    onUploadManualProof,
-    onDeleteManualAchievement,
-    onClose,
-}: {
-    achievements: ResumeCertification[] | null
-    proofs: Record<number, AchievementProof>
-    onUploadProof: (index: number, file: File) => void
-    removedIndices: Set<number>
-    onDeleteAchievement: (index: number) => void
-    manualAchievements: ManualAchievement[]
-    onAddManualAchievement: (title: string) => void
-    onUploadManualProof: (id: string, file: File) => void
-    onDeleteManualAchievement: (id: string) => void
-    onClose: () => void
-}) {
-    const [newTitle, setNewTitle] = useState('')
-    const visibleResumeCount = achievements?.filter((_, i) => !removedIndices.has(i)).length ?? 0
-    const hasAnyAchievements = visibleResumeCount > 0 || manualAchievements.length > 0
-
-    const handleAdd = () => {
-        const trimmed = newTitle.trim()
-        if (!trimmed) return
-        onAddManualAchievement(trimmed)
-        setNewTitle('')
-    }
-
-    return (
-        <Modal
-            title="Your Achievements"
-            subtitle="Pulled in automatically from your resume — or add your own below."
-            icon={<Trophy className="w-4 h-4 text-pod-primary" />}
-            onClose={onClose}
-        >
-            {!hasAnyAchievements ? (
-                <p className="text-sm text-pod-muted">No achievements yet — upload a resume to bring some in, or add one below.</p>
-            ) : (
-                <div className="space-y-3">
-                    {achievements?.map((achievement, i) => (
-                        removedIndices.has(i) ? null : (
-                            <AchievementRow
-                                key={`resume-${i}`}
-                                title={achievement.title}
-                                issuer={achievement.issuer}
-                                proof={proofs[i]}
-                                onUploadProof={file => onUploadProof(i, file)}
-                                onDelete={() => onDeleteAchievement(i)}
-                            />
-                        )
-                    ))}
-                    {manualAchievements.map(achievement => (
-                        <AchievementRow
-                            key={achievement.id}
-                            title={achievement.title}
-                            proof={achievement.proof}
-                            onUploadProof={file => onUploadManualProof(achievement.id, file)}
-                            onDelete={() => onDeleteManualAchievement(achievement.id)}
-                        />
-                    ))}
-                </div>
-            )}
-
-            <div className="mt-5 border-t border-pod-border pt-4">
-                <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-2.5">Add a new achievement</p>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                        type="text"
-                        value={newTitle}
-                        onChange={e => setNewTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
-                        placeholder="e.g. Google Data Analytics Certificate"
-                        className="min-w-0 flex-1 rounded-lg border border-pod-border bg-pod-bg-soft px-3 py-2.5 text-sm text-pod-text outline-none transition focus:border-transparent focus:ring-2 focus:ring-pod-primary"
-                    />
-                    <button
-                        type="button"
-                        onClick={handleAdd}
-                        disabled={!newTitle.trim()}
-                        className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-lg bg-pod-primary px-4 py-2.5 text-sm font-semibold text-pod-primary-foreground transition hover:bg-pod-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <Plus className="h-4 w-4" /> Add
-                    </button>
-                </div>
-                <p className="mt-1.5 text-xs text-pod-muted">It'll show as (not verified) until you upload proof.</p>
-            </div>
-        </Modal>
     )
 }
 
@@ -580,20 +355,6 @@ function InvitePeersModal({ onClose }: { onClose: () => void }) {
  *  this page — its object URL points to a small generated text stand-in
  *  (there's no real uploaded file for a seeded row), so View/Download still
  *  work like they would for a genuinely uploaded one. */
-/** Seeds the first achievement as already verified, so the "fully built-out"
- *  mock persona shows every state at a glance the moment the pop-up opens:
- *  one Verified (with a real, viewable/downloadable proof file), and the
- *  other two still "(not verified)" with the upload-to-verify affordance —
- *  same generated-Blob-as-stand-in-file approach as seedLetters below. */
-function seedAchievementProofs(): Record<number, AchievementProof> {
-    const file = new File(
-        ['Mock verification document for Jordan Ellis — AWS Certified Solutions Architect – Associate.'],
-        'aws-certified-solutions-architect-proof.pdf',
-        { type: 'application/pdf' }
-    )
-    return { 0: { file, url: URL.createObjectURL(file) } }
-}
-
 function seedLetters(): RecommendationLetter[] {
     const blob = new Blob(
         ['This is a mock letter of recommendation for Jordan Ellis, provided as sample content for this dashboard prototype.'],
@@ -605,69 +366,25 @@ function seedLetters(): RecommendationLetter[] {
 /**
  * "Authenticated Capability" — what other people have said about this member
  * (Testimonials, plus an "Invite peers" flow to collect more), and the
- * supporting documents that back their profile up: Achievements (transferred
- * in from resume parsing, verified by uploading proof), Certificates (earned
- * on this platform), and Letters of Recommendation (uploaded directly here).
- * Each credential category now opens its own pop-up rather than being an
- * inline dropzone, since Achievements/Certificates are no longer raw
- * uploads — see CredentialCard below.
+ * supporting documents that back their profile up: Certificates (earned on
+ * this platform) and Letters of Recommendation (uploaded directly here).
+ * Résumé-derived Achievements live at the top of Status & Progress instead
+ * (see ProgressCountsPanel) — Poh Moi's direction from the Sep 10 sandbox
+ * session was that certifications/badges belong there, as a feel-good/pride
+ * signal, not in this authentication-and-proof bucket.
+ * Each credential category opens its own pop-up rather than being an inline
+ * dropzone, since Certificates are no longer a raw upload — see
+ * CredentialCard below.
  */
-export default function AuthenticatedCapabilitySection({ achievements, fullName }: AuthenticatedCapabilitySectionProps) {
+export default function AuthenticatedCapabilitySection({ fullName }: AuthenticatedCapabilitySectionProps) {
     const [open, setOpen] = useState(false)
 
     const [showInvite, setShowInvite] = useState(false)
-    const [showAchievements, setShowAchievements] = useState(false)
     const [showCertificates, setShowCertificates] = useState(false)
     const [showLetters, setShowLetters] = useState(false)
 
-    const [achievementProofs, setAchievementProofs] = useState<Record<number, AchievementProof>>(seedAchievementProofs)
-    const [removedAchievementIndices, setRemovedAchievementIndices] = useState<Set<number>>(new Set())
-    const [manualAchievements, setManualAchievements] = useState<ManualAchievement[]>([])
     const [letters, setLetters] = useState<RecommendationLetter[]>(seedLetters)
     const [certificates, setCertificates] = useState<PlatformCertificate[]>(MOCK_PLATFORM_CERTIFICATES)
-
-    const handleUploadProof = (index: number, file: File) => {
-        setAchievementProofs(prev => {
-            const previous = prev[index]
-            if (previous) URL.revokeObjectURL(previous.url)
-            return { ...prev, [index]: { file, url: URL.createObjectURL(file) } }
-        })
-    }
-
-    // Resume-parsed achievements aren't owned by this component's state (they
-    // come in as a prop from the resume-parse result), so "deleting" one just
-    // hides its index here rather than mutating the source array.
-    const handleDeleteAchievement = (index: number) => {
-        setRemovedAchievementIndices(prev => new Set(prev).add(index))
-        setAchievementProofs(prev => {
-            const previous = prev[index]
-            if (!previous) return prev
-            URL.revokeObjectURL(previous.url)
-            const next = { ...prev }
-            delete next[index]
-            return next
-        })
-    }
-
-    const handleAddManualAchievement = (title: string) => {
-        setManualAchievements(prev => [...prev, { id: `manual-${Date.now()}`, title }])
-    }
-
-    const handleUploadManualProof = (id: string, file: File) => {
-        setManualAchievements(prev => prev.map(achievement => {
-            if (achievement.id !== id) return achievement
-            if (achievement.proof) URL.revokeObjectURL(achievement.proof.url)
-            return { ...achievement, proof: { file, url: URL.createObjectURL(file) } }
-        }))
-    }
-
-    const handleDeleteManualAchievement = (id: string) => {
-        setManualAchievements(prev => {
-            const target = prev.find(achievement => achievement.id === id)
-            if (target?.proof) URL.revokeObjectURL(target.proof.url)
-            return prev.filter(achievement => achievement.id !== id)
-        })
-    }
 
     const handleAddLetter = ({ name, file }: { name: string; file: File }) => {
         setLetters(prev => [...prev, { id: `letter-${Date.now()}`, name, fileName: file.name, url: URL.createObjectURL(file) }])
@@ -729,18 +446,11 @@ export default function AuthenticatedCapabilitySection({ achievements, fullName 
                     </div>
 
                     <div className="mt-6 pt-6 border-t border-pod-border">
-                        <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Achievements &amp; Credentials</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-pod-muted mb-1">Credentials</p>
                         <p className="text-sm text-pod-muted mb-3">
-                            Achievements come in from your resume; certificates and letters of recommendation live here too.
+                            Certificates and letters of recommendation live here. (Achievements pulled from your resume are up top, in Status &amp; Progress.)
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <CredentialCard
-                                icon={Trophy}
-                                label="Achievements"
-                                description="Awards, recognitions, or milestones worth showing off."
-                                ctaLabel="Click to see your achievements"
-                                onClick={() => setShowAchievements(true)}
-                            />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <CredentialCard
                                 icon={ScrollText}
                                 label="Letters of Recommendation"
@@ -761,20 +471,6 @@ export default function AuthenticatedCapabilitySection({ achievements, fullName 
             </AccordionPanel>
 
             {showInvite && <InvitePeersModal onClose={() => setShowInvite(false)} />}
-            {showAchievements && (
-                <AchievementsModal
-                    achievements={achievements}
-                    proofs={achievementProofs}
-                    onUploadProof={handleUploadProof}
-                    removedIndices={removedAchievementIndices}
-                    onDeleteAchievement={handleDeleteAchievement}
-                    manualAchievements={manualAchievements}
-                    onAddManualAchievement={handleAddManualAchievement}
-                    onUploadManualProof={handleUploadManualProof}
-                    onDeleteManualAchievement={handleDeleteManualAchievement}
-                    onClose={() => setShowAchievements(false)}
-                />
-            )}
             {showCertificates && (
                 <CertificatesModal certificates={certificates} fullName={fullName} onDelete={handleDeleteCertificate} onClose={() => setShowCertificates(false)} />
             )}
